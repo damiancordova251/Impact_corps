@@ -19,6 +19,7 @@ const elements = {
 };
 
 elements.primaryAction.addEventListener("click", handleRecommendationRequest);
+elements.itemList.addEventListener("change", updateCompletionState);
 registerServiceWorker();
 
 async function handleRecommendationRequest() {
@@ -38,15 +39,16 @@ async function handleRecommendationRequest() {
 }
 
 function renderRecommendation(weather, recommendation) {
-  elements.appShell.classList.remove("is-error", "is-warning");
+  elements.appShell.classList.remove("is-error", "is-warning", "is-complete");
   elements.statusPill.textContent = "Updated";
   elements.kicker.textContent = "Today";
-  elements.recommendationTitle.textContent = recommendation.title;
-  elements.reasonText.textContent = recommendation.reason;
+  elements.recommendationTitle.textContent = "Morning Checklist:";
+  elements.reasonText.textContent = getChecklistPrompt(recommendation.items);
   elements.primaryAction.disabled = false;
   elements.primaryAction.textContent = "Refresh";
 
   renderItems(recommendation.items);
+  updateCompletionState();
   renderFacts(weather);
 }
 
@@ -68,25 +70,27 @@ function renderFacts(weather) {
 }
 
 function renderItems(items) {
-  elements.itemList.replaceChildren(
-    ...items.map((item) => {
-      const listItem = document.createElement("li");
-      listItem.textContent = item;
-      return listItem;
-    })
-  );
+  if (items.length === 0) {
+    const listItem = document.createElement("li");
+    listItem.className = "empty-checklist";
+    listItem.textContent = "No extra items needed";
+    elements.itemList.replaceChildren(listItem);
+    return;
+  }
+
+  elements.itemList.replaceChildren(...items.map(createChecklistItem));
 }
 
 function setLoading(label) {
-  elements.appShell.classList.remove("is-error", "is-warning");
+  elements.appShell.classList.remove("is-error", "is-warning", "is-complete");
   elements.statusPill.textContent = "Loading";
   elements.kicker.textContent = label;
-  elements.recommendationTitle.textContent = "One moment";
+  elements.recommendationTitle.textContent = "Morning Checklist:";
   elements.reasonText.textContent = "Checking today's weather.";
   elements.primaryAction.disabled = true;
   elements.primaryAction.textContent = "Checking...";
   elements.lastUpdated.textContent = "Location is used only for this forecast.";
-  renderItems([]);
+  clearItems();
 }
 
 function renderError(error) {
@@ -94,6 +98,7 @@ function renderError(error) {
 
   elements.appShell.classList.toggle("is-warning", copy.kind === "warning");
   elements.appShell.classList.toggle("is-error", copy.kind === "error");
+  elements.appShell.classList.remove("is-complete");
   elements.statusPill.textContent = copy.status;
   elements.kicker.textContent = copy.kicker;
   elements.recommendationTitle.textContent = copy.title;
@@ -101,8 +106,48 @@ function renderError(error) {
   elements.primaryAction.disabled = false;
   elements.primaryAction.textContent = "Try again";
   elements.lastUpdated.textContent = copy.footer;
-  renderItems([]);
+  clearItems();
   resetFacts();
+}
+
+function createChecklistItem(item) {
+  const listItem = document.createElement("li");
+  const label = document.createElement("label");
+  const checkbox = document.createElement("input");
+  const box = document.createElement("span");
+  const text = document.createElement("span");
+
+  label.className = "checklist-row";
+  checkbox.type = "checkbox";
+  box.className = "checkbox-mark";
+  box.innerHTML = "&#10003;";
+  text.className = "checklist-label";
+  text.textContent = item;
+
+  label.append(checkbox, box, text);
+  listItem.append(label);
+
+  return listItem;
+}
+
+function updateCompletionState() {
+  const checkboxes = [...elements.itemList.querySelectorAll("input[type='checkbox']")];
+  const isComplete = checkboxes.length > 0 && checkboxes.every((checkbox) => checkbox.checked);
+
+  elements.appShell.classList.toggle("is-complete", isComplete);
+}
+
+function clearItems() {
+  elements.itemList.replaceChildren();
+  updateCompletionState();
+}
+
+function getChecklistPrompt(items) {
+  if (items.length === 0) {
+    return "You are set for now.";
+  }
+
+  return "Check these before you leave.";
 }
 
 function getErrorCopy(error) {

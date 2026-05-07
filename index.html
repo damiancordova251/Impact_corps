@@ -24,9 +24,12 @@
       <section class="recommendation-panel" aria-live="polite">
         <img class="app-icon" src="icons/app-icon.svg" alt="">
         <p class="kicker" id="kicker">Today</p>
-        <h1 class="recommendation-title" id="recommendationTitle">Get today's recommendation</h1>
+        <div class="checklist-heading">
+          <h1 class="recommendation-title" id="recommendationTitle">Morning Checklist:</h1>
+          <div class="completion-mark" id="completionMark" aria-hidden="true">&#10003;</div>
+        </div>
         <p class="reason" id="reasonText">Ready when you are.</p>
-        <ul class="item-list" id="itemList" aria-label="Recommended items"></ul>
+        <ul class="item-list" id="itemList" aria-label="Morning checklist"></ul>
         <button class="primary-action" id="primaryAction" type="button">Use current location</button>
       </section>
 
