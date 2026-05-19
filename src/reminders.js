@@ -1,7 +1,7 @@
 export const REMINDER_COPY = {
   title: "Ready Checklist",
   body: "Your weather checklist is ready.",
-  scheduledLater: "Daily scheduled reminders will be added next."
+  scheduledServer: "The server will send a simple daily reminder at your routine start time."
 };
 
 export function createChecklistReminder({ url = "./" } = {}) {
@@ -13,6 +13,10 @@ export function createChecklistReminder({ url = "./" } = {}) {
   };
 }
 
-export function getRoutineReminderCopy(routineStartLabel) {
-  return `Future reminders will use your ${routineStartLabel} routine start.`;
+export function getRoutineReminderCopy(routineStartLabel, hasLocation = false) {
+  if (hasLocation) {
+    return `Scheduled reminders will use your ${routineStartLabel} routine start and this session's location.`;
+  }
+
+  return `Scheduled reminders will use your ${routineStartLabel} routine start.`;
 }

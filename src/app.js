@@ -1,9 +1,11 @@
 import { APP_CONFIG } from "./config.js";
 import { getCurrentLocation, LocationAccessError } from "./location.js";
 import {
+  getBrowserTimezone,
   getNotificationEnvironment,
   requestNotificationPermission,
-  sendTestNotification
+  sendTestNotification,
+  subscribeToPushReminders
 } from "./notifications.js";
 import {
   createChecklistReminder,
@@ -20,8 +22,15 @@ import {
 
 const ROUTINE_START_STORAGE_KEY = "morningWearRoutineStartMinutes";
 const LEGACY_WAKE_TIME_STORAGE_KEY = "morningWearWakeTimeMinutes";
+const PUSH_SUBSCRIPTION_ID_STORAGE_KEY = "morningWearPushSubscriptionId";
 const ROUTINE_START_STEP_MINUTES = 30;
 const DEFAULT_ROUTINE_START_MINUTES = 6 * 60;
+
+const state = {
+  latestLocation: null,
+  pushSubscriptionId: getSavedPushSubscriptionId(),
+  syncedLocation: false
+};
 
 const elements = {
   appShell: document.querySelector(".app-shell"),
@@ -59,6 +68,7 @@ elements.checklistTab.addEventListener("click", () => showScreen("checklist"));
 elements.weatherTab.addEventListener("click", () => showScreen("weather"));
 elements.screenTrack.addEventListener("scroll", syncActiveScreenFromScroll, { passive: true });
 elements.routineStartInput.addEventListener("input", handleRoutineStartChange);
+elements.routineStartInput.addEventListener("change", handleRoutineStartCommit);
 elements.enableNotificationsButton.addEventListener("click", handleEnableNotifications);
 elements.testNotificationButton.addEventListener("click", handleTestNotification);
 window.addEventListener("resize", () => syncActiveScreenFromScroll());
@@ -73,6 +83,9 @@ async function handleRecommendationRequest() {
 
   try {
     const location = await getCurrentLocation();
+    state.latestLocation = toReminderLocation(location);
+    state.syncedLocation = false;
+    renderNotificationSetting();
     setLoading("Checking weather");
 
     const weather = await fetchTodayWeather(location);
@@ -286,6 +299,16 @@ function handleRoutineStartChange() {
   elements.appStatus.textContent = `Routine start saved for ${formatTimeLabel(routineStartTime)}.`;
 }
 
+async function handleRoutineStartCommit() {
+  const environment = getNotificationEnvironment();
+
+  if (environment.permission !== "granted" || !state.pushSubscriptionId) {
+    return;
+  }
+
+  await syncPushReminderSubscription("Routine start updated. Saving reminder schedule...");
+}
+
 function initializeNotificationSetting() {
   renderNotificationSetting();
 }
@@ -296,7 +319,7 @@ async function handleEnableNotifications() {
   const permission = await requestNotificationPermission();
 
   if (permission === "granted") {
-    renderNotificationSetting("Notifications enabled. You can send a test notification now.");
+    await syncPushReminderSubscription("Notifications enabled. Saving server reminder...");
     return;
   }
 
@@ -324,11 +347,30 @@ async function handleTestNotification() {
   }
 }
 
+async function syncPushReminderSubscription(statusMessage) {
+  renderNotificationSetting(statusMessage);
+
+  try {
+    const subscription = await subscribeToPushReminders({
+      routineStartMinutes: getSavedRoutineStartTime(),
+      timezone: getBrowserTimezone(),
+      location: state.latestLocation
+    });
+
+    state.pushSubscriptionId = subscription.id;
+    state.syncedLocation = Boolean(state.latestLocation);
+    savePushSubscriptionId(subscription.id);
+    renderNotificationSetting("Server reminders are saved. You can still send a local test notification.");
+  } catch (error) {
+    renderNotificationSetting(`Permission is granted, but server reminders were not saved. ${error.message}`);
+  }
+}
+
 function renderNotificationSetting(statusOverride = null) {
   const environment = getNotificationEnvironment();
   const routineStartLabel = formatTimeLabel(getSavedRoutineStartTime());
 
-  elements.notificationRoutineNote.textContent = getRoutineReminderCopy(routineStartLabel);
+  elements.notificationRoutineNote.textContent = getReminderRoutineNote(routineStartLabel);
 
   if (!environment.supported) {
     elements.notificationStatus.textContent = statusOverride
@@ -339,14 +381,13 @@ function renderNotificationSetting(statusOverride = null) {
     return;
   }
 
-  elements.enableNotificationsButton.disabled = environment.permission === "granted"
-    || environment.permission === "denied";
+  elements.enableNotificationsButton.disabled = environment.permission === "denied";
   elements.testNotificationButton.disabled = environment.permission !== "granted";
 
   if (environment.permission === "granted") {
-    elements.enableNotificationsButton.textContent = "Enabled";
+    elements.enableNotificationsButton.textContent = state.pushSubscriptionId ? "Update reminders" : "Save reminders";
     elements.notificationStatus.textContent = statusOverride
-      ?? `Notifications are enabled. ${REMINDER_COPY.scheduledLater}`;
+      ?? getGrantedNotificationStatus();
     return;
   }
 
@@ -372,10 +413,32 @@ function getUnsupportedNotificationStatus(environment) {
 
 function getDefaultNotificationStatus(environment) {
   if (environment.needsHomeScreenInstall) {
-    return `On iPhone, install this PWA to the Home Screen before enabling reminders. ${REMINDER_COPY.scheduledLater}`;
+    return `On iPhone, install this PWA to the Home Screen before enabling reminders. ${REMINDER_COPY.scheduledServer}`;
   }
 
-  return `Notifications are supported. Tap Enable reminders to request permission. ${REMINDER_COPY.scheduledLater}`;
+  return `Notifications are supported. Tap Enable reminders to request permission and save this PWA with the reminder server. ${REMINDER_COPY.scheduledServer}`;
+}
+
+function getGrantedNotificationStatus() {
+  if (state.pushSubscriptionId) {
+    return `Server reminders are saved. ${REMINDER_COPY.scheduledServer}`;
+  }
+
+  return "Notifications are enabled. Tap Save reminders to finish server scheduling.";
+}
+
+function getReminderRoutineNote(routineStartLabel) {
+  if (state.latestLocation && state.syncedLocation) {
+    return getRoutineReminderCopy(routineStartLabel, true);
+  }
+
+  if (state.latestLocation) {
+    const action = state.pushSubscriptionId ? "Update reminders" : "Save reminders";
+
+    return `Scheduled reminders will use your ${routineStartLabel} routine start. Tap ${action} to include this session's location for future weather-aware reminders.`;
+  }
+
+  return getRoutineReminderCopy(routineStartLabel);
 }
 
 function getSavedRoutineStartTime() {
@@ -411,6 +474,22 @@ function saveRoutineStartTime(routineStartTime) {
   }
 }
 
+function getSavedPushSubscriptionId() {
+  try {
+    return window.localStorage.getItem(PUSH_SUBSCRIPTION_ID_STORAGE_KEY);
+  } catch (error) {
+    return null;
+  }
+}
+
+function savePushSubscriptionId(subscriptionId) {
+  try {
+    window.localStorage.setItem(PUSH_SUBSCRIPTION_ID_STORAGE_KEY, subscriptionId);
+  } catch (error) {
+    elements.appStatus.textContent = "Reminder subscription could not be saved locally.";
+  }
+}
+
 function isValidRoutineStartTime(value) {
   return Number.isInteger(value)
     && value >= 0
@@ -426,6 +505,14 @@ function formatTimeLabel(minutes) {
     hour: "numeric",
     minute: "2-digit"
   }).format(date);
+}
+
+function toReminderLocation(location) {
+  return {
+    latitude: location.latitude,
+    longitude: location.longitude,
+    accuracy: location.accuracy
+  };
 }
 
 function showScreen(screenName) {

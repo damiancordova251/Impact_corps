@@ -1,4 +1,4 @@
-const CACHE_NAME = "morning-wear-v2";
+const CACHE_NAME = "morning-wear-v3";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -46,11 +46,54 @@ self.addEventListener("fetch", (event) => {
   );
 });
 
+self.addEventListener("push", (event) => {
+  const reminder = getPushReminder(event);
+
+  event.waitUntil(
+    self.registration.showNotification(reminder.title, {
+      body: reminder.body,
+      tag: reminder.tag ?? "ready-checklist",
+      icon: "./icons/app-icon.svg",
+      badge: "./icons/app-icon.svg",
+      data: {
+        url: reminder.url ?? "./"
+      }
+    })
+  );
+});
+
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
   event.waitUntil(openOrFocusApp(event.notification.data?.url));
 });
+
+function getPushReminder(event) {
+  if (!event.data) {
+    return getDefaultReminder();
+  }
+
+  try {
+    return {
+      ...getDefaultReminder(),
+      ...event.data.json()
+    };
+  } catch (error) {
+    return {
+      ...getDefaultReminder(),
+      body: event.data.text() || getDefaultReminder().body
+    };
+  }
+}
+
+function getDefaultReminder() {
+  return {
+    title: "Ready Checklist",
+    body: "Your weather checklist is ready.",
+    tag: "ready-checklist",
+    url: "./"
+  };
+}
 
 async function openOrFocusApp(notificationUrl = "./") {
   const targetUrl = new URL(notificationUrl, self.registration.scope).href;
