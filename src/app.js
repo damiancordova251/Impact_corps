@@ -1,7 +1,13 @@
 import { APP_CONFIG } from "./config.js";
 import { getCurrentLocation, LocationAccessError } from "./location.js";
 import { fetchTodayWeather, WeatherFetchError } from "./weather.js";
-import { createRecommendation, formatTemp } from "./recommendation.js";
+import {
+  buildPeriodWeather,
+  createRecommendation,
+  formatTemp,
+  getActivePeriod,
+  getPeriodForecast
+} from "./recommendation.js";
 
 const elements = {
   appShell: document.querySelector(".app-shell"),
@@ -36,6 +42,8 @@ window.addEventListener("resize", () => syncActiveScreenFromScroll());
 registerServiceWorker();
 
 async function handleRecommendationRequest() {
+  const requestedAt = new Date();
+
   setLoading("Getting location");
 
   try {
@@ -43,7 +51,10 @@ async function handleRecommendationRequest() {
     setLoading("Checking weather");
 
     const weather = await fetchTodayWeather(location);
-    const recommendation = createRecommendation(weather);
+    const activePeriod = getActivePeriod(requestedAt);
+    const periodForecast = getPeriodForecast(weather, activePeriod);
+    const periodWeather = buildPeriodWeather(weather, periodForecast);
+    const recommendation = createRecommendation(periodWeather);
 
     renderRecommendation(weather, recommendation);
   } catch (error) {
