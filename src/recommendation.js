@@ -1,10 +1,10 @@
 const RAIN_CODES = new Set([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99]);
 const SNOW_CODES = new Set([71, 73, 75, 77, 85, 86]);
 const SUNNY_CODES = new Set([0, 1, 2]);
-const MINUTES_PER_DAY = 24 * 60;
-const PERIOD_PIVOT_MINUTES = 60;
-const PERIOD_LENGTH_MINUTES = 8 * 60;
-export const DEFAULT_ROUTINE_START_MINUTES = 6 * 60;
+const READY_CHECKLIST_TITLE = "Ready Checklist:";
+const FORECAST_WINDOW_HOURS = 12;
+const DAYLIGHT_START_HOUR = 6;
+const DAYLIGHT_END_HOUR = 20;
 const MAX_CHECKLIST_ITEMS = 6;
 const RAIN_PROBABILITY_THRESHOLD = 40;
 const MEANINGFUL_RAIN_PROBABILITY = 75;
@@ -16,130 +16,89 @@ const SWEATSHIRT_TEMP = 66;
 const WINDY_MPH = 24;
 const COLD_WIND_MPH = 18;
 const HOT_TEMP = 86;
-const CHECKLIST_PERIODS = [
-  { key: "morning", label: "Morning", anchorMinute: 6 * 60 },
-  { key: "afternoon", label: "Afternoon", anchorMinute: 14 * 60 },
-  { key: "night", label: "Night", anchorMinute: 22 * 60 }
-];
 
-export function getActivePeriod(now = new Date(), routineStartMinutes = DEFAULT_ROUTINE_START_MINUTES) {
-  const starts = getPeriodStartsAround(now, routineStartMinutes);
-  const current = [...starts].reverse().find((period) => period.start <= now) ?? starts[0];
-  const next = starts.find((period) => period.start > now);
-
-  if (next) {
-    const minutesToNext = (next.start.getTime() - now.getTime()) / 60000;
-
-    if (minutesToNext <= PERIOD_PIVOT_MINUTES) {
-      return withPeriodEnd(next);
-    }
-  }
-
-  return withPeriodEnd(current);
-}
-
-export function buildPeriodSchedule(routineStartMinutes = DEFAULT_ROUTINE_START_MINUTES) {
-  const startMinute = normalizeMinute(routineStartMinutes);
-  const anchorPeriod = getClosestAnchorPeriod(startMinute);
-  const shiftMinutes = getSignedMinuteDelta(startMinute, anchorPeriod.anchorMinute);
-
-  return CHECKLIST_PERIODS.map((period) => ({
-    ...period,
-    startMinute: normalizeMinute(period.anchorMinute + shiftMinutes)
-  }));
-}
-
-export function getClosestAnchorPeriod(routineStartMinutes = DEFAULT_ROUTINE_START_MINUTES) {
-  const startMinute = normalizeMinute(routineStartMinutes);
-
-  return CHECKLIST_PERIODS.reduce((closest, period) => {
-    const delta = getSignedMinuteDelta(startMinute, period.anchorMinute);
-    const distance = Math.abs(delta);
-
-    if (!closest || distance < closest.distance || (distance === closest.distance && delta >= 0 && closest.delta < 0)) {
-      return { period, distance, delta };
-    }
-
-    return closest;
-  }, null).period;
-}
-
-export function getPeriodForecast(weather, period) {
+export function getNextForecastWindow(weather, now = new Date()) {
   const hourly = Array.isArray(weather.hourly) ? weather.hourly : [];
-  const hours = hourly.filter((hour) => isWithinPeriod(hour, period));
-  const representativeHour = findNearestHour(hourly, period.start);
+  const start = new Date(now);
+  const end = new Date(start);
+
+  end.setHours(end.getHours() + FORECAST_WINDOW_HOURS);
+
+  const hours = hourly.filter((hour) => isWithinWindow(hour, start, end));
+  const representativeHour = findNearestHour(hourly, start);
 
   return {
-    period,
+    title: READY_CHECKLIST_TITLE,
+    start,
+    end,
     hours,
     representativeHour,
-    usableHours: hours.length > 0 ? hours : [representativeHour].filter(Boolean)
+    usableHours: hours.length > 0 ? hours : [representativeHour].filter(Boolean),
+    containsDaylight: hasDaylightHours(hours)
   };
 }
 
-export function buildPeriodWeather(weather, periodForecast) {
-  const periodHours = periodForecast.usableHours ?? [];
-  const representative = periodForecast.representativeHour ?? weather.current ?? {};
+export function buildWindowWeather(weather, forecastWindow) {
+  const windowHours = forecastWindow.usableHours ?? [];
+  const representative = forecastWindow.representativeHour ?? weather.current ?? {};
 
-  if (periodHours.length === 0) {
+  if (windowHours.length === 0) {
     return {
       ...weather,
-      checklistPeriod: periodForecast.period,
-      checklistForecast: periodForecast
+      checklistTitle: READY_CHECKLIST_TITLE,
+      checklistWindow: forecastWindow
     };
   }
 
   return {
     ...weather,
-    checklistPeriod: periodForecast.period,
-    checklistForecast: periodForecast,
+    checklistTitle: READY_CHECKLIST_TITLE,
+    checklistWindow: forecastWindow,
     current: {
       ...weather.current,
       time: representative.time ?? weather.current.time,
       temperature: bestNumber(representative.temperature, weather.current.temperature),
       feelsLike: bestNumber(representative.feelsLike, weather.current.feelsLike, weather.current.temperature),
-      precipitation: maxFromHours(periodHours, "precipitation", weather.current.precipitation),
-      rain: maxFromHours(periodHours, "rain", weather.current.rain),
-      showers: maxFromHours(periodHours, "showers", weather.current.showers),
-      snowfall: maxFromHours(periodHours, "snowfall", weather.current.snowfall),
+      precipitation: maxFromHours(windowHours, "precipitation", weather.current.precipitation),
+      rain: maxFromHours(windowHours, "rain", weather.current.rain),
+      showers: maxFromHours(windowHours, "showers", weather.current.showers),
+      snowfall: maxFromHours(windowHours, "snowfall", weather.current.snowfall),
       weatherCode: bestNumber(representative.weatherCode, weather.current.weatherCode),
       windSpeed: bestNumber(representative.windSpeed, weather.current.windSpeed)
     },
     daily: {
       ...weather.daily,
-      weatherCode: getPeriodWeatherCode(periodHours, bestNumber(representative.weatherCode, weather.daily.weatherCode)),
-      high: maxFromHours(periodHours, "temperature", weather.daily.high),
-      low: minFromHours(periodHours, "temperature", weather.daily.low),
-      precipitationProbability: maxFromHours(periodHours, "precipitationProbability", weather.daily.precipitationProbability),
-      windMax: maxFromHours(periodHours, "windSpeed", weather.daily.windMax)
+      weatherCode: getWindowWeatherCode(windowHours, bestNumber(representative.weatherCode, weather.daily.weatherCode)),
+      high: maxFromHours(windowHours, "temperature", weather.daily.high),
+      low: minFromHours(windowHours, "temperature", weather.daily.low),
+      precipitationProbability: maxFromHours(windowHours, "precipitationProbability", weather.daily.precipitationProbability),
+      windMax: maxFromHours(windowHours, "windSpeed", weather.daily.windMax)
     }
   };
 }
 
-export function createRecommendation(periodWeather) {
-  const period = periodWeather.checklistPeriod;
-  const feelsLike = bestNumber(periodWeather.current.feelsLike, periodWeather.current.temperature, periodWeather.daily.high);
-  const currentTemp = bestNumber(periodWeather.current.temperature, periodWeather.daily.high, feelsLike);
-  const high = bestNumber(periodWeather.daily.high, currentTemp);
-  const low = bestNumber(periodWeather.daily.low, feelsLike);
+export function createRecommendation(windowWeather) {
+  const feelsLike = bestNumber(windowWeather.current.feelsLike, windowWeather.current.temperature, windowWeather.daily.high);
+  const currentTemp = bestNumber(windowWeather.current.temperature, windowWeather.daily.high, feelsLike);
+  const high = bestNumber(windowWeather.daily.high, currentTemp);
+  const low = bestNumber(windowWeather.daily.low, feelsLike);
   const wind = Math.max(
-    bestNumber(periodWeather.current.windSpeed, 0),
-    bestNumber(periodWeather.daily.windMax, 0)
+    bestNumber(windowWeather.current.windSpeed, 0),
+    bestNumber(windowWeather.daily.windMax, 0)
   );
-  const precipProbability = bestNumber(periodWeather.daily.precipitationProbability, 0);
+  const precipProbability = bestNumber(windowWeather.daily.precipitationProbability, 0);
   const currentPrecip = Math.max(
-    bestNumber(periodWeather.current.precipitation, 0),
-    bestNumber(periodWeather.current.rain, 0),
-    bestNumber(periodWeather.current.showers, 0),
-    bestNumber(periodWeather.current.snowfall, 0)
+    bestNumber(windowWeather.current.precipitation, 0),
+    bestNumber(windowWeather.current.rain, 0),
+    bestNumber(windowWeather.current.showers, 0),
+    bestNumber(windowWeather.current.snowfall, 0)
   );
-  const snowAmount = bestNumber(periodWeather.current.snowfall, 0);
-  const currentCode = periodWeather.current.weatherCode;
-  const dailyCode = periodWeather.daily.weatherCode;
+  const snowAmount = bestNumber(windowWeather.current.snowfall, 0);
+  const currentCode = windowWeather.current.weatherCode;
+  const dailyCode = windowWeather.daily.weatherCode;
   const rainRisk = precipProbability >= RAIN_PROBABILITY_THRESHOLD || currentPrecip > 0 || hasCode(RAIN_CODES, currentCode, dailyCode);
   const snowRisk = snowAmount > 0 || (precipProbability >= 35 && hasCode(SNOW_CODES, currentCode, dailyCode));
   const meaningfulRain = rainRisk && (precipProbability >= MEANINGFUL_RAIN_PROBABILITY || currentPrecip >= MEANINGFUL_PRECIPITATION_INCHES);
-  const sunny = hasCode(SUNNY_CODES, currentCode, dailyCode);
   const veryCold = feelsLike <= VERY_COLD_TEMP || low <= VERY_COLD_TEMP;
   const cold = feelsLike <= COLD_TEMP || low <= COLD_TEMP - 3;
   const cool = feelsLike <= COOL_TEMP || low <= COOL_TEMP - 4;
@@ -208,7 +167,7 @@ export function createRecommendation(periodWeather) {
     reasons.push(`Wind may reach ${Math.round(wind)} mph.`);
   }
 
-  if (shouldRecommendSunProtection(periodWeather, period, { sunny, hot, high, currentTemp, rainRisk, snowRisk })) {
+  if (shouldRecommendSunProtection(windowWeather, { hot, high, currentTemp, rainRisk, snowRisk })) {
     addAction(actions, "Sunglasses or hat", "Bring sunglasses or a hat", 65);
   }
 
@@ -218,8 +177,7 @@ export function createRecommendation(periodWeather) {
     return {
       title: "No extra layer needed",
       reason: `It feels like ${formatTemp(feelsLike)}, with a high of ${formatTemp(high)}.`,
-      period,
-      checklistTitle: getChecklistTitle(period),
+      checklistTitle: READY_CHECKLIST_TITLE,
       items: []
     };
   }
@@ -227,89 +185,44 @@ export function createRecommendation(periodWeather) {
   return {
     title: combineActionLabels(uniqueActions.slice(0, 2)),
     reason: combineReasons(reasons),
-    period,
-    checklistTitle: getChecklistTitle(period),
+    checklistTitle: READY_CHECKLIST_TITLE,
     items: uniqueActions.slice(0, MAX_CHECKLIST_ITEMS).map((action) => action.item)
   };
 }
 
-function getPeriodStartsAround(now, routineStartMinutes) {
-  const dayStart = new Date(now);
-  dayStart.setHours(0, 0, 0, 0);
+function shouldRecommendSunProtection(weather, conditions) {
+  const daylightHours = getDaylightHours(weather.checklistWindow?.usableHours ?? []);
+  const daylightWarmEnough = daylightHours.some((hour) => {
+    const temperature = bestNumber(hour.feelsLike, hour.temperature);
 
-  const starts = [];
-  const schedule = buildPeriodSchedule(routineStartMinutes);
+    return temperature >= 70;
+  });
+  const daylightSunny = daylightHours.some((hour) => hasCode(SUNNY_CODES, hour.weatherCode));
+  const warmEnough = conditions.hot || conditions.high >= 75 || conditions.currentTemp >= 70 || daylightWarmEnough;
 
-  for (let dayOffset = -1; dayOffset <= 2; dayOffset += 1) {
-    schedule.forEach((period) => {
-      const start = new Date(dayStart);
-      start.setDate(dayStart.getDate() + dayOffset);
-      start.setMinutes(period.startMinute);
-      starts.push({ ...period, start });
-    });
-  }
-
-  return starts.sort((a, b) => a.start - b.start);
-}
-
-function withPeriodEnd(period) {
-  const end = new Date(period.start);
-  end.setMinutes(end.getMinutes() + PERIOD_LENGTH_MINUTES);
-
-  return { ...period, end };
-}
-
-function normalizeMinute(minutes) {
-  return ((minutes % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY;
-}
-
-function getSignedMinuteDelta(targetMinute, anchorMinute) {
-  const delta = normalizeMinute(targetMinute - anchorMinute);
-
-  if (delta > MINUTES_PER_DAY / 2) {
-    return delta - MINUTES_PER_DAY;
-  }
-
-  return delta;
-}
-
-function getChecklistTitle(period) {
-  return `${period?.label ?? "Morning"} Checklist:`;
-}
-
-function shouldRecommendSunProtection(weather, period, conditions) {
-  const warmEnough = conditions.hot || conditions.high >= 75 || conditions.currentTemp >= 70;
-
-  return isDaylightPeriod(period)
-    && conditions.sunny
+  return daylightHours.length > 0
+    && daylightSunny
     && warmEnough
     && !conditions.rainRisk
-    && !conditions.snowRisk
-    && !isFullyOvernightForecast(weather);
+    && !conditions.snowRisk;
 }
 
-function isDaylightPeriod(period) {
-  return ["morning", "afternoon"].includes(period?.key);
+export function hasDaylightHours(hours) {
+  return getDaylightHours(Array.isArray(hours) ? hours : []).length > 0;
 }
 
-function isFullyOvernightForecast(weather) {
-  const hours = weather.checklistForecast?.usableHours ?? [];
-
-  if (hours.length === 0) {
-    return weather.checklistPeriod?.key === "night";
-  }
-
-  return hours.every((hour) => {
+function getDaylightHours(hours) {
+  return hours.filter((hour) => {
     const forecastHour = parseForecastTime(hour.time).getHours();
 
-    return forecastHour >= 0 && forecastHour < 6;
+    return forecastHour >= DAYLIGHT_START_HOUR && forecastHour < DAYLIGHT_END_HOUR;
   });
 }
 
-function isWithinPeriod(hour, period) {
+function isWithinWindow(hour, start, end) {
   const hourTime = parseForecastTime(hour.time);
 
-  return hourTime >= period.start && hourTime < period.end;
+  return hourTime >= start && hourTime < end;
 }
 
 function findNearestHour(hourly, targetTime) {
@@ -345,7 +258,7 @@ function minFromHours(hours, key, fallback) {
   return Math.min(...values);
 }
 
-function getPeriodWeatherCode(hours, fallback) {
+function getWindowWeatherCode(hours, fallback) {
   const codes = hours.map((hour) => hour.weatherCode).filter((code) => Number.isFinite(code));
 
   return codes.find((code) => hasCode(SNOW_CODES, code))
@@ -416,7 +329,7 @@ function combineReasons(reasons) {
   const uniqueReasons = [...new Set(reasons)];
 
   if (uniqueReasons.length === 0) {
-    return "Today's weather looks manageable.";
+    return "The next 12 hours look manageable.";
   }
 
   return uniqueReasons.slice(0, 2).join(" ");
@@ -427,7 +340,7 @@ function getRainReason(precipProbability) {
     return `Rain risk is ${Math.round(precipProbability)}%.`;
   }
 
-  return "Rain is in today's forecast.";
+  return "Rain is in the next 12-hour forecast.";
 }
 
 function lowerFirst(text) {

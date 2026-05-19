@@ -2,17 +2,16 @@ import { APP_CONFIG } from "./config.js";
 import { getCurrentLocation, LocationAccessError } from "./location.js";
 import { fetchTodayWeather, WeatherFetchError } from "./weather.js";
 import {
-  buildPeriodWeather,
+  buildWindowWeather,
   createRecommendation,
-  DEFAULT_ROUTINE_START_MINUTES,
   formatTemp,
-  getActivePeriod,
-  getPeriodForecast
+  getNextForecastWindow
 } from "./recommendation.js";
 
 const ROUTINE_START_STORAGE_KEY = "morningWearRoutineStartMinutes";
 const LEGACY_WAKE_TIME_STORAGE_KEY = "morningWearWakeTimeMinutes";
 const ROUTINE_START_STEP_MINUTES = 30;
+const DEFAULT_ROUTINE_START_MINUTES = 6 * 60;
 
 const elements = {
   appShell: document.querySelector(".app-shell"),
@@ -40,10 +39,6 @@ const elements = {
   appStatus: document.querySelector("#appStatus")
 };
 
-const state = {
-  latestWeather: null
-};
-
 elements.primaryAction.addEventListener("click", handleRecommendationRequest);
 elements.itemList.addEventListener("change", updateCompletionState);
 elements.checklistTab.addEventListener("click", () => showScreen("checklist"));
@@ -64,18 +59,16 @@ async function handleRecommendationRequest() {
     setLoading("Checking weather");
 
     const weather = await fetchTodayWeather(location);
-    state.latestWeather = weather;
-    renderPeriodRecommendation(weather, requestedAt);
+    renderWindowRecommendation(weather, requestedAt);
   } catch (error) {
     renderError(error);
   }
 }
 
-function renderPeriodRecommendation(weather, requestedAt = new Date()) {
-  const activePeriod = getActivePeriod(requestedAt, getSavedRoutineStartTime());
-  const periodForecast = getPeriodForecast(weather, activePeriod);
-  const periodWeather = buildPeriodWeather(weather, periodForecast);
-  const recommendation = createRecommendation(periodWeather);
+function renderWindowRecommendation(weather, requestedAt = new Date()) {
+  const forecastWindow = getNextForecastWindow(weather, requestedAt);
+  const windowWeather = buildWindowWeather(weather, forecastWindow);
+  const recommendation = createRecommendation(windowWeather);
 
   renderRecommendation(weather, recommendation);
 }
@@ -84,8 +77,8 @@ function renderRecommendation(weather, recommendation) {
   elements.appShell.classList.remove("is-error", "is-warning", "is-complete");
   elements.statusPill.textContent = "Updated";
   elements.kicker.textContent = "Today";
-  elements.recommendationTitle.textContent = recommendation.checklistTitle ?? "Checklist:";
-  elements.reasonText.textContent = getChecklistPrompt(recommendation.items);
+  elements.recommendationTitle.textContent = recommendation.checklistTitle ?? "Ready Checklist:";
+  elements.reasonText.textContent = getChecklistPrompt();
   elements.primaryAction.disabled = false;
   elements.primaryAction.textContent = "Refresh";
 
@@ -133,7 +126,7 @@ function setLoading(label) {
   elements.appShell.classList.remove("is-error", "is-warning", "is-complete");
   elements.statusPill.textContent = "Loading";
   elements.kicker.textContent = label;
-  elements.recommendationTitle.textContent = "Checklist:";
+  elements.recommendationTitle.textContent = "Ready Checklist:";
   elements.reasonText.textContent = "Checking today's weather.";
   elements.primaryAction.disabled = true;
   elements.primaryAction.textContent = "Checking...";
@@ -190,12 +183,8 @@ function clearItems() {
   updateCompletionState();
 }
 
-function getChecklistPrompt(items) {
-  if (items.length === 0) {
-    return "You are set for now.";
-  }
-
-  return "Check these before you leave.";
+function getChecklistPrompt() {
+  return "Prepared for the next 12 hours.";
 }
 
 function getErrorCopy(error) {
@@ -277,10 +266,6 @@ function handleRoutineStartChange() {
   saveRoutineStartTime(routineStartTime);
   elements.routineStartValue.textContent = formatTimeLabel(routineStartTime);
   elements.appStatus.textContent = `Routine start saved for ${formatTimeLabel(routineStartTime)}.`;
-
-  if (state.latestWeather) {
-    renderPeriodRecommendation(state.latestWeather);
-  }
 }
 
 function getSavedRoutineStartTime() {
