@@ -2,14 +2,14 @@
 
 Morning Wear is a PWA that creates a Ready Checklist from the next 12 hours of weather.
 
-## Stage 7B Persistent Push Reminders
+## Stage 7C Deployed Push Reminder Testing
 
-This stage uses Supabase/Postgres to persist Web Push subscriptions for scheduled PWA reminders.
+This stage prepares the PWA and Express backend for deployment to a real HTTPS URL for personal iPhone testing without Cloudflare Tunnel.
 
 - Push subscriptions survive server restarts.
 - Supabase is used from the backend only.
 - The Supabase service role key must never be exposed to frontend JavaScript.
-- Exact location is not stored in Supabase for Stage 7B.
+- Exact location is not stored in Supabase.
 - There are no accounts or user records yet.
 - The scheduler is a simple interval that checks saved subscriptions.
 - The notification is intentionally simple: it opens the app, where the Ready Checklist is generated.
@@ -86,6 +86,83 @@ The persisted reminder fields are:
 - created/updated timestamps
 
 Stage 7B intentionally does not store latitude, longitude, or accuracy.
+
+## Deployment Recommendation
+
+Use a Render Free Web Service for Stage 7C personal testing.
+
+Why Render:
+
+- It can run the existing Express server and PWA from one HTTPS origin.
+- It supports Node apps with `npm install` and `npm start`.
+- It provides a free `onrender.com` HTTPS URL.
+- It is beginner-friendly for Git-based deploys.
+
+Free-hosting warnings:
+
+- Render Free web services spin down after 15 minutes without inbound traffic and take about one minute to wake back up.
+- The scheduler does not run while the service is asleep, so scheduled reminders can be missed.
+- Render can restart Free services, and the local filesystem is ephemeral. Supabase keeps reminder data safe, but the running scheduler is still not durable.
+- Free usage limits apply. If limits are exceeded and no payment method is attached, Render may suspend services instead of billing.
+- Render Free is enough for personal iPhone Web Push testing. It is not reliable enough for pilot reminder delivery.
+
+For reliable pilot reminders, use an always-on service or a separate durable scheduler/worker that can run at reminder time.
+
+Other options considered:
+
+- Railway: easy deploy flow, but the free path is credit/trial based and can have network restrictions if the account is not verified.
+- Fly.io: powerful, but it is not a true free tier and requires close billing management.
+- Koyeb: has a free web instance, but requires card verification and the free instance scales to zero after inactivity.
+
+## Render Deployment Steps
+
+1. Push this repo to GitHub.
+2. In Render, create a new Web Service from the repo.
+3. Choose the Free instance type.
+4. Set the build command:
+
+```sh
+npm install
+```
+
+5. Set the start command:
+
+```sh
+npm start
+```
+
+6. Add environment variables in Render:
+
+```text
+VAPID_PUBLIC_KEY=your_public_key
+VAPID_PRIVATE_KEY=your_private_key
+VAPID_SUBJECT=mailto:you@example.com
+SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_backend_only_service_role_key
+SUPABASE_PUSH_SUBSCRIPTIONS_TABLE=push_subscriptions
+SCHEDULER_INTERVAL_MS=30000
+```
+
+Do not set `HOST` on Render unless you set it to `0.0.0.0`. Render provides `PORT` automatically, so do not hardcode `PORT`.
+
+Never commit secrets. Keep `.env` local and configure hosted secrets only in the Render dashboard.
+
+After deploy, open:
+
+```text
+https://your-service-name.onrender.com/api/health
+```
+
+Expected shape:
+
+```json
+{
+  "ok": true,
+  "vapidConfigured": true,
+  "subscriptionStoreConfigured": true,
+  "subscriptions": 0
+}
+```
 
 ## Run Locally
 
@@ -180,9 +257,34 @@ Real iPhone PWA push testing requires:
 
 Localhost testing is useful on desktop browsers. iPhone testing usually needs an HTTPS tunnel or deployed HTTPS environment.
 
+## iPhone Deployed Test Plan
+
+1. Open the deployed `https://your-service-name.onrender.com` URL in iPhone Safari.
+2. Use Safari Share, then Add to Home Screen.
+3. Open Morning Wear from the Home Screen icon.
+4. Open Settings.
+5. Choose a routine start time.
+6. Tap `Enable reminders`.
+7. Allow notifications.
+8. Confirm a Supabase row exists in `push_subscriptions`.
+9. From your computer, send a backend test push:
+
+```sh
+curl -X POST https://your-service-name.onrender.com/api/push/test \
+  -H "Content-Type: application/json" \
+  -d "{}"
+```
+
+10. Confirm the notification reaches the iPhone Home Screen PWA.
+11. Set the routine start time to the next `:00` or `:30` minute.
+12. Keep the deployed service awake by opening the app shortly before the reminder time.
+13. Confirm the scheduled notification arrives.
+14. Confirm `last_sent_date` updates in Supabase.
+15. Keep the app/service active through the same minute and confirm no duplicate reminder is sent for the same local date.
+
 ## Production Notes
 
-Stage 7B adds persistent storage, but deployment is still a separate Stage 7C step.
+Stage 7C adds deployment readiness for personal testing, but Free web hosting is still not reliable enough for a broader pilot reminder system.
 
 Before production or a broader pilot, you will also want:
 

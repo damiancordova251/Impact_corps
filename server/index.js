@@ -27,7 +27,7 @@ const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, "..");
 const app = express();
 const port = Number(process.env.PORT) || 3000;
-const host = process.env.HOST || "127.0.0.1";
+const host = process.env.HOST || "0.0.0.0";
 const schedulerIntervalMs = Number(process.env.SCHEDULER_INTERVAL_MS) || 30000;
 const pushConfig = configureWebPush();
 
