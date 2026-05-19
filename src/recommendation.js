@@ -1,7 +1,19 @@
 const RAIN_CODES = new Set([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99]);
 const SNOW_CODES = new Set([71, 73, 75, 77, 85, 86]);
+const SUNNY_CODES = new Set([0, 1, 2]);
 const PERIOD_PIVOT_MINUTES = 60;
 const PERIOD_LENGTH_HOURS = 6;
+const MAX_CHECKLIST_ITEMS = 6;
+const RAIN_PROBABILITY_THRESHOLD = 40;
+const MEANINGFUL_RAIN_PROBABILITY = 75;
+const MEANINGFUL_PRECIPITATION_INCHES = 0.05;
+const VERY_COLD_TEMP = 32;
+const COLD_TEMP = 45;
+const COOL_TEMP = 58;
+const SWEATSHIRT_TEMP = 66;
+const WINDY_MPH = 24;
+const COLD_WIND_MPH = 18;
+const HOT_TEMP = 86;
 const CHECKLIST_PERIODS = [
   { key: "midnight", label: "Midnight", hour: 0 },
   { key: "morning", label: "Morning", hour: 6 },
@@ -97,42 +109,83 @@ export function createRecommendation(periodWeather) {
   const snowAmount = bestNumber(periodWeather.current.snowfall, 0);
   const currentCode = periodWeather.current.weatherCode;
   const dailyCode = periodWeather.daily.weatherCode;
-  const rainRisk = precipProbability >= 40 || currentPrecip > 0 || hasCode(RAIN_CODES, currentCode, dailyCode);
+  const rainRisk = precipProbability >= RAIN_PROBABILITY_THRESHOLD || currentPrecip > 0 || hasCode(RAIN_CODES, currentCode, dailyCode);
   const snowRisk = snowAmount > 0 || (precipProbability >= 35 && hasCode(SNOW_CODES, currentCode, dailyCode));
+  const meaningfulRain = rainRisk && (precipProbability >= MEANINGFUL_RAIN_PROBABILITY || currentPrecip >= MEANINGFUL_PRECIPITATION_INCHES);
+  const sunny = hasCode(SUNNY_CODES, currentCode, dailyCode);
+  const veryCold = feelsLike <= VERY_COLD_TEMP || low <= VERY_COLD_TEMP;
+  const cold = feelsLike <= COLD_TEMP || low <= COLD_TEMP - 3;
+  const cool = feelsLike <= COOL_TEMP || low <= COOL_TEMP - 4;
+  const sweatshirtWeather = feelsLike <= SWEATSHIRT_TEMP || low <= SWEATSHIRT_TEMP - 6;
+  const coldWind = cold && wind >= COLD_WIND_MPH;
+  const windy = wind >= WINDY_MPH || coldWind;
+  const hot = high >= HOT_TEMP || feelsLike >= HOT_TEMP - 4;
 
   const actions = [];
   const reasons = [];
 
   if (snowRisk) {
-    actions.push({ label: "Wear a warm coat and boots", item: "Warm coat and boots", priority: 110 });
+    addAction(actions, "Heavy coat", "Wear a heavy coat", 130);
+    addAction(actions, "Gloves", "Wear gloves", 120);
+    addAction(actions, "Beanie", "Wear a beanie", 115);
+    addAction(actions, "Scarf", "Wear a scarf", 110);
+    addAction(actions, "Rain boots or waterproof shoes", "Wear rain boots or waterproof shoes", 105);
     reasons.push("Snow is likely today.");
-  } else if (rainRisk) {
-    actions.push({ label: "Bring an umbrella", item: "Umbrella", priority: 100 });
+  } else if (veryCold) {
+    addAction(actions, "Heavy coat", "Wear a heavy coat", 130);
+    addAction(actions, "Gloves", "Wear gloves", 120);
+    addAction(actions, "Beanie", "Wear a beanie", 115);
+    addAction(actions, "Scarf", "Wear a scarf", 110);
+    reasons.push(`It feels like ${formatTemp(feelsLike)}.`);
+  } else if (cold) {
+    addAction(actions, "Heavy coat", "Wear a heavy coat", 130);
+    reasons.push(`It feels like ${formatTemp(feelsLike)}.`);
+
+    if (coldWind || feelsLike <= 40 || low <= 38) {
+      addAction(actions, "Gloves", "Wear gloves", 120);
+      addAction(actions, "Beanie", "Wear a beanie", 115);
+    }
+
+    if (feelsLike <= 36 || low <= 34) {
+      addAction(actions, "Scarf", "Wear a scarf", 110);
+    }
+  } else if (rainRisk && feelsLike <= 72) {
+    addAction(actions, "Light jacket", "Wear a light jacket", 90);
     reasons.push(getRainReason(precipProbability));
-  }
-
-  if (feelsLike <= 34 || low <= 34) {
-    actions.push({ label: "Wear a warm coat", item: "Warm coat", priority: 90 });
+  } else if (cool) {
+    addAction(actions, "Light jacket", "Wear a light jacket", 90);
     reasons.push(`It feels like ${formatTemp(feelsLike)}.`);
-  } else if (feelsLike <= 48 || low <= 45) {
-    actions.push({ label: "Wear a jacket", item: "Jacket", priority: 80 });
+  } else if (sweatshirtWeather && !rainRisk) {
+    addAction(actions, "Sweatshirt", "Wear a sweatshirt", 80);
     reasons.push(`It feels like ${formatTemp(feelsLike)}.`);
-  } else if (feelsLike <= 61 || low <= 55) {
-    actions.push({ label: "Wear a light jacket", item: "Light jacket", priority: 70 });
-    reasons.push(`It feels like ${formatTemp(feelsLike)}.`);
-  }
-
-  if (wind >= 24) {
-    actions.push({ label: "Wear a wind-resistant layer", item: "Wind layer", priority: 60 });
-    reasons.push(`Wind may reach ${Math.round(wind)} mph.`);
-  }
-
-  if (high >= 88 && feelsLike >= 72 && actions.length === 0) {
-    actions.push({ label: "Wear light clothing", item: "Light clothing", priority: 50 });
+  } else if (hot) {
+    addAction(actions, "Light clothing", "Wear light clothing", 70);
     reasons.push(`The high is ${formatTemp(high)}.`);
   }
 
-  const uniqueActions = dedupeActions(actions).sort((a, b) => b.priority - a.priority);
+  if (rainRisk && !snowRisk) {
+    addAction(actions, "Umbrella", "Bring an umbrella", 125);
+    reasons.push(getRainReason(precipProbability));
+  }
+
+  if (snowRisk || (rainRisk && (cold || meaningfulRain))) {
+    addAction(actions, "Rain boots or waterproof shoes", "Wear rain boots or waterproof shoes", 105);
+  }
+
+  if (cold && !veryCold && !rainRisk && !snowRisk && (feelsLike <= 42 || low <= 40)) {
+    addAction(actions, "Sweatpants", "Wear sweatpants", 75);
+  }
+
+  if (windy) {
+    addAction(actions, "Wind-resistant layer", "Wear a wind-resistant layer", 95);
+    reasons.push(`Wind may reach ${Math.round(wind)} mph.`);
+  }
+
+  if (sunny && (hot || high >= 75 || currentTemp >= 70) && !rainRisk && !snowRisk) {
+    addAction(actions, "Sunglasses or hat", "Bring sunglasses or a hat", 65);
+  }
+
+  const uniqueActions = removeLayerConflicts(dedupeActions(actions)).sort((a, b) => b.priority - a.priority);
 
   if (uniqueActions.length === 0) {
     return {
@@ -149,7 +202,7 @@ export function createRecommendation(periodWeather) {
     reason: combineReasons(reasons),
     period,
     checklistTitle: getChecklistTitle(period),
-    items: uniqueActions.slice(0, 3).map((action) => action.item)
+    items: uniqueActions.slice(0, MAX_CHECKLIST_ITEMS).map((action) => action.item)
   };
 }
 
@@ -242,14 +295,40 @@ function hasCode(codeSet, ...codes) {
   return codes.some((code) => codeSet.has(Number(code)));
 }
 
+function addAction(actions, item, label, priority) {
+  actions.push({ item, label, priority });
+}
+
 function dedupeActions(actions) {
-  const seen = new Set();
+  const bestActions = new Map();
+
+  actions.forEach((action) => {
+    const current = bestActions.get(action.item);
+
+    if (!current || action.priority > current.priority) {
+      bestActions.set(action.item, action);
+    }
+  });
+
+  return [...bestActions.values()];
+}
+
+function removeLayerConflicts(actions) {
+  const items = new Set(actions.map((action) => action.item));
+
   return actions.filter((action) => {
-    if (seen.has(action.item)) {
+    if (items.has("Heavy coat") && ["Light jacket", "Sweatshirt", "Light clothing"].includes(action.item)) {
       return false;
     }
 
-    seen.add(action.item);
+    if (items.has("Light jacket") && ["Sweatshirt", "Light clothing"].includes(action.item)) {
+      return false;
+    }
+
+    if (items.has("Sweatshirt") && action.item === "Light clothing") {
+      return false;
+    }
+
     return true;
   });
 }

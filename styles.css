@@ -162,7 +162,7 @@ button {
   min-height: 0;
   margin: 8px 0 10px;
   color: var(--text);
-  font-size: clamp(2rem, 10vw, 2.75rem);
+  font-size: clamp(2.15rem, 10.5vw, 2.95rem);
   line-height: 1.02;
   letter-spacing: 0;
   text-align: left;
