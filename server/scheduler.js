@@ -14,6 +14,8 @@ export function startReminderScheduler({
       markSent,
       removeSubscription,
       sendReminder
+    }).catch((error) => {
+      console.error("Reminder scheduler check failed.", error);
     });
   };
 
@@ -28,7 +30,7 @@ export async function checkSubscriptions({
   removeSubscription,
   sendReminder
 }) {
-  const subscriptions = getSubscriptions();
+  const subscriptions = await getSubscriptions();
 
   await Promise.all(subscriptions.map(async (record) => {
     const localTime = getLocalTimeParts(now, record.timezone);
@@ -43,11 +45,11 @@ export async function checkSubscriptions({
 
     try {
       await sendReminder(record);
-      markSent(record.id, localTime.dateKey);
+      await markSent(record.id, localTime.dateKey);
       console.log(`Sent Ready Checklist reminder to ${record.id} for ${localTime.dateKey}`);
     } catch (error) {
       if (error?.subscriptionGone) {
-        removeSubscription(record.id);
+        await removeSubscription(record.id);
         console.log(`Removed expired push subscription ${record.id}`);
         return;
       }

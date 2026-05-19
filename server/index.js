@@ -11,6 +11,7 @@ import { startReminderScheduler } from "./scheduler.js";
 import {
   getAllSubscriptions,
   getSubscription,
+  isSubscriptionStoreConfigured,
   markReminderSent,
   removeSubscription,
   toPublicSubscription,
@@ -32,12 +33,27 @@ const pushConfig = configureWebPush();
 
 app.use(express.json({ limit: "128kb" }));
 
-app.get("/api/health", (req, res) => {
-  res.json({
-    ok: true,
-    vapidConfigured: pushConfig.configured,
-    subscriptions: getAllSubscriptions().length
-  });
+app.get("/api/health", async (req, res) => {
+  const storeConfigured = isSubscriptionStoreConfigured();
+
+  try {
+    const subscriptions = storeConfigured ? await getAllSubscriptions() : [];
+
+    res.json({
+      ok: true,
+      vapidConfigured: pushConfig.configured,
+      subscriptionStoreConfigured: storeConfigured,
+      subscriptions: subscriptions.length
+    });
+  } catch (error) {
+    console.error("Subscription storage health check failed.", error);
+    res.status(503).json({
+      ok: false,
+      vapidConfigured: pushConfig.configured,
+      subscriptionStoreConfigured: storeConfigured,
+      error: "Subscription storage is unavailable."
+    });
+  }
 });
 
 app.get("/api/push/public-key", (req, res) => {
@@ -53,7 +69,7 @@ app.get("/api/push/public-key", (req, res) => {
   });
 });
 
-app.post("/api/push/subscriptions", (req, res) => {
+app.post("/api/push/subscriptions", async (req, res) => {
   if (!pushConfig.configured) {
     res.status(503).json({
       error: "VAPID keys are not configured on the reminder server."
@@ -68,18 +84,28 @@ app.post("/api/push/subscriptions", (req, res) => {
     return;
   }
 
-  const record = upsertSubscription(parsed.value);
+  try {
+    const record = await upsertSubscription(parsed.value);
 
-  res.status(201).json({
-    subscription: toPublicSubscription(record)
-  });
+    res.status(201).json({
+      subscription: toPublicSubscription(record)
+    });
+  } catch (error) {
+    sendSubscriptionStoreError(res, error);
+  }
 });
 
-app.get("/api/push/subscriptions", (req, res) => {
-  res.json({
-    count: getAllSubscriptions().length,
-    subscriptions: getAllSubscriptions().map(toPublicSubscription)
-  });
+app.get("/api/push/subscriptions", async (req, res) => {
+  try {
+    const subscriptions = await getAllSubscriptions();
+
+    res.json({
+      count: subscriptions.length,
+      subscriptions: subscriptions.map(toPublicSubscription)
+    });
+  } catch (error) {
+    sendSubscriptionStoreError(res, error);
+  }
 });
 
 app.post("/api/push/test", async (req, res) => {
@@ -90,10 +116,17 @@ app.post("/api/push/test", async (req, res) => {
     return;
   }
 
-  const subscriptionId = req.body?.subscriptionId;
-  const targets = subscriptionId
-    ? [getSubscription(subscriptionId)].filter(Boolean)
-    : getAllSubscriptions();
+  let targets;
+
+  try {
+    const subscriptionId = req.body?.subscriptionId;
+    targets = subscriptionId
+      ? [await getSubscription(subscriptionId)].filter(Boolean)
+      : await getAllSubscriptions();
+  } catch (error) {
+    sendSubscriptionStoreError(res, error);
+    return;
+  }
 
   if (targets.length === 0) {
     res.status(404).json({
@@ -117,6 +150,11 @@ app.listen(port, host, () => {
 
   if (!pushConfig.configured) {
     console.log("VAPID keys are missing. Copy .env.example to .env and add generated keys.");
+    return;
+  }
+
+  if (!isSubscriptionStoreConfigured()) {
+    console.log("Supabase storage is missing. Add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to .env.");
     return;
   }
 
@@ -184,6 +222,13 @@ function isValidPushSubscription(subscription) {
     && subscription.endpoint.length > 0
     && typeof subscription.keys?.p256dh === "string"
     && typeof subscription.keys?.auth === "string";
+}
+
+function sendSubscriptionStoreError(res, error) {
+  console.error("Subscription storage request failed.", error);
+  res.status(503).json({
+    error: "Subscription storage is unavailable. Check Supabase configuration and table setup."
+  });
 }
 
 function servePwaFiles(appInstance) {

@@ -1,53 +1,82 @@
 import crypto from "node:crypto";
+import { createClient } from "@supabase/supabase-js";
 
-const subscriptions = new Map();
+const DEFAULT_TABLE_NAME = "push_subscriptions";
 
-export function upsertSubscription(input) {
+let supabaseClient = null;
+
+export function isSubscriptionStoreConfigured() {
+  return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
+}
+
+export async function upsertSubscription(input) {
   const subscription = input.subscription;
   const id = createSubscriptionId(subscription.endpoint);
-  const existing = subscriptions.get(id);
+  const existing = await getSubscription(id);
   const now = new Date().toISOString();
 
-  const record = {
+  const row = {
     id,
     subscription,
-    routineStartMinutes: input.routineStartMinutes,
+    routine_start_minutes: input.routineStartMinutes,
     timezone: input.timezone,
-    location: normalizeLocation(input.location),
-    createdAt: existing?.createdAt ?? now,
-    updatedAt: now,
-    lastSentDate: existing?.lastSentDate ?? null
+    last_sent_date: existing?.lastSentDate ?? null,
+    updated_at: now
   };
 
-  subscriptions.set(id, record);
+  const { data, error } = await getClient()
+    .from(getTableName())
+    .upsert(row, { onConflict: "id" })
+    .select()
+    .single();
 
-  return record;
+  assertNoStoreError(error);
+
+  return toRecord(data);
 }
 
-export function getSubscription(id) {
-  return subscriptions.get(id) ?? null;
+export async function getSubscription(id) {
+  const { data, error } = await getClient()
+    .from(getTableName())
+    .select()
+    .eq("id", id)
+    .maybeSingle();
+
+  assertNoStoreError(error);
+
+  return data ? toRecord(data) : null;
 }
 
-export function getAllSubscriptions() {
-  return [...subscriptions.values()];
+export async function getAllSubscriptions() {
+  const { data, error } = await getClient()
+    .from(getTableName())
+    .select()
+    .order("created_at", { ascending: true });
+
+  assertNoStoreError(error);
+
+  return data.map(toRecord);
 }
 
-export function markReminderSent(id, localDate) {
-  const record = subscriptions.get(id);
+export async function markReminderSent(id, localDate) {
+  const { error } = await getClient()
+    .from(getTableName())
+    .update({
+      last_sent_date: localDate,
+      updated_at: new Date().toISOString()
+    })
+    .eq("id", id);
 
-  if (!record) {
-    return;
-  }
-
-  subscriptions.set(id, {
-    ...record,
-    lastSentDate: localDate,
-    updatedAt: new Date().toISOString()
-  });
+  assertNoStoreError(error);
 }
 
-export function removeSubscription(id) {
-  subscriptions.delete(id);
+export async function removeSubscription(id) {
+  const { error } = await getClient()
+    .from(getTableName())
+    .delete()
+    .eq("id", id);
+
+  assertNoStoreError(error);
 }
 
 export function toPublicSubscription(record) {
@@ -55,11 +84,39 @@ export function toPublicSubscription(record) {
     id: record.id,
     routineStartMinutes: record.routineStartMinutes,
     timezone: record.timezone,
-    hasLocation: Boolean(record.location),
+    hasLocation: false,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
     lastSentDate: record.lastSentDate
   };
+}
+
+function getClient() {
+  if (supabaseClient) {
+    return supabaseClient;
+  }
+
+  const supabaseUrl = process.env.SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+
+  if (!supabaseUrl || !serviceRoleKey) {
+    throw new SubscriptionStoreError(
+      "Supabase storage is not configured. Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY."
+    );
+  }
+
+  supabaseClient = createClient(supabaseUrl, serviceRoleKey, {
+    auth: {
+      persistSession: false,
+      autoRefreshToken: false
+    }
+  });
+
+  return supabaseClient;
+}
+
+function getTableName() {
+  return process.env.SUPABASE_PUSH_SUBSCRIPTIONS_TABLE || DEFAULT_TABLE_NAME;
 }
 
 function createSubscriptionId(endpoint) {
@@ -70,22 +127,27 @@ function createSubscriptionId(endpoint) {
     .slice(0, 20);
 }
 
-function normalizeLocation(location) {
-  if (!location || typeof location !== "object") {
-    return null;
-  }
-
-  const latitude = Number(location.latitude);
-  const longitude = Number(location.longitude);
-  const accuracy = Number(location.accuracy);
-
-  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
-    return null;
-  }
-
+function toRecord(row) {
   return {
-    latitude,
-    longitude,
-    accuracy: Number.isFinite(accuracy) ? accuracy : null
+    id: row.id,
+    subscription: row.subscription,
+    routineStartMinutes: row.routine_start_minutes,
+    timezone: row.timezone,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+    lastSentDate: row.last_sent_date
   };
+}
+
+function assertNoStoreError(error) {
+  if (error) {
+    throw new SubscriptionStoreError(error.message);
+  }
+}
+
+class SubscriptionStoreError extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "SubscriptionStoreError";
+  }
 }

@@ -10,6 +10,7 @@
     "check": "node --check server/index.js && node --check server/pushService.js && node --check server/scheduler.js && node --check server/subscriptionStore.js && node --check server/time.js && node --check src/app.js && node --check src/notifications.js && node --check src/reminders.js && node --check src/recommendation.js && node --check src/weather.js && node --check sw.js"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.106.0",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "web-push": "^3.6.7"
