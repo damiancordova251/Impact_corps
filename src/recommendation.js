@@ -181,7 +181,7 @@ export function createRecommendation(periodWeather) {
     reasons.push(`Wind may reach ${Math.round(wind)} mph.`);
   }
 
-  if (sunny && (hot || high >= 75 || currentTemp >= 70) && !rainRisk && !snowRisk) {
+  if (shouldRecommendSunProtection(periodWeather, period, { sunny, hot, high, currentTemp, rainRisk, snowRisk })) {
     addAction(actions, "Sunglasses or hat", "Bring sunglasses or a hat", 65);
   }
 
@@ -233,6 +233,35 @@ function withPeriodEnd(period) {
 
 function getChecklistTitle(period) {
   return `${period?.label ?? "Morning"} Checklist:`;
+}
+
+function shouldRecommendSunProtection(weather, period, conditions) {
+  const warmEnough = conditions.hot || conditions.high >= 75 || conditions.currentTemp >= 70;
+
+  return isDaylightPeriod(period)
+    && conditions.sunny
+    && warmEnough
+    && !conditions.rainRisk
+    && !conditions.snowRisk
+    && !isFullyOvernightForecast(weather);
+}
+
+function isDaylightPeriod(period) {
+  return ["morning", "afternoon", "evening"].includes(period?.key);
+}
+
+function isFullyOvernightForecast(weather) {
+  const hours = weather.checklistForecast?.usableHours ?? [];
+
+  if (hours.length === 0) {
+    return weather.checklistPeriod?.key === "midnight";
+  }
+
+  return hours.every((hour) => {
+    const forecastHour = parseForecastTime(hour.time).getHours();
+
+    return forecastHour >= 0 && forecastHour < 6;
+  });
 }
 
 function isWithinPeriod(hour, period) {
