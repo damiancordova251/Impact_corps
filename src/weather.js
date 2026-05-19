@@ -29,11 +29,22 @@ export async function fetchTodayWeather({ latitude, longitude }) {
       "precipitation_probability_max",
       "wind_speed_10m_max"
     ].join(","),
+    hourly: [
+      "temperature_2m",
+      "apparent_temperature",
+      "precipitation_probability",
+      "precipitation",
+      "rain",
+      "showers",
+      "snowfall",
+      "weather_code",
+      "wind_speed_10m"
+    ].join(","),
     temperature_unit: "fahrenheit",
     wind_speed_unit: "mph",
     precipitation_unit: "inch",
     timezone: "auto",
-    forecast_days: "1"
+    forecast_days: "2"
   }).toString();
 
   let response;
@@ -55,6 +66,7 @@ export async function fetchTodayWeather({ latitude, longitude }) {
 function normalizeWeather(data) {
   const current = data.current ?? {};
   const daily = data.daily ?? {};
+  const hourly = data.hourly ?? {};
 
   const weather = {
     latitude: toNumber(data.latitude),
@@ -79,7 +91,8 @@ function normalizeWeather(data) {
       low: toNumber(first(daily.temperature_2m_min)),
       precipitationProbability: toNumber(first(daily.precipitation_probability_max)),
       windMax: toNumber(first(daily.wind_speed_10m_max))
-    }
+    },
+    hourly: normalizeHourly(hourly)
   };
 
   if (!Number.isFinite(weather.current.temperature) && !Number.isFinite(weather.daily.high)) {
@@ -87,6 +100,27 @@ function normalizeWeather(data) {
   }
 
   return weather;
+}
+
+function normalizeHourly(hourly) {
+  const times = Array.isArray(hourly.time) ? hourly.time : [];
+
+  return times.map((time, index) => ({
+    time,
+    temperature: toNumber(valueAt(hourly.temperature_2m, index)),
+    feelsLike: toNumber(valueAt(hourly.apparent_temperature, index)),
+    precipitationProbability: toNumber(valueAt(hourly.precipitation_probability, index)),
+    precipitation: toNumber(valueAt(hourly.precipitation, index)),
+    rain: toNumber(valueAt(hourly.rain, index)),
+    showers: toNumber(valueAt(hourly.showers, index)),
+    snowfall: toNumber(valueAt(hourly.snowfall, index)),
+    weatherCode: toNumber(valueAt(hourly.weather_code, index)),
+    windSpeed: toNumber(valueAt(hourly.wind_speed_10m, index))
+  }));
+}
+
+function valueAt(values, index) {
+  return Array.isArray(values) ? values[index] : null;
 }
 
 function first(value) {

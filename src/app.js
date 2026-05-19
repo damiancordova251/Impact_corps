@@ -55,7 +55,7 @@ function renderRecommendation(weather, recommendation) {
   elements.appShell.classList.remove("is-error", "is-warning", "is-complete");
   elements.statusPill.textContent = "Updated";
   elements.kicker.textContent = "Today";
-  elements.recommendationTitle.textContent = "Morning Checklist:";
+  elements.recommendationTitle.textContent = recommendation.checklistTitle ?? "Morning Checklist:";
   elements.reasonText.textContent = getChecklistPrompt(recommendation.items);
   elements.primaryAction.disabled = false;
   elements.primaryAction.textContent = "Refresh";

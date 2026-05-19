@@ -1,7 +1,27 @@
 const RAIN_CODES = new Set([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99]);
 const SNOW_CODES = new Set([71, 73, 75, 77, 85, 86]);
+const PERIOD_PIVOT_MINUTES = 60;
+const PERIOD_LENGTH_HOURS = 6;
+const CHECKLIST_PERIODS = [
+  { key: "midnight", label: "Midnight", hour: 0 },
+  { key: "morning", label: "Morning", hour: 6 },
+  { key: "afternoon", label: "Afternoon", hour: 12 },
+  { key: "evening", label: "Evening", hour: 18 }
+];
 
-export function createRecommendation(weather) {
+export function createRecommendation(weather, now = new Date()) {
+  const period = selectChecklistPeriod(now);
+  const periodWeather = createPeriodWeather(weather, period);
+  const recommendation = createWeatherRecommendation(periodWeather);
+
+  return {
+    ...recommendation,
+    period,
+    checklistTitle: `${period.label} Checklist:`
+  };
+}
+
+function createWeatherRecommendation(weather) {
   const feelsLike = bestNumber(weather.current.feelsLike, weather.current.temperature, weather.daily.high);
   const currentTemp = bestNumber(weather.current.temperature, weather.daily.high, feelsLike);
   const high = bestNumber(weather.daily.high, currentTemp);
@@ -70,6 +90,135 @@ export function createRecommendation(weather) {
     reason: combineReasons(reasons),
     items: uniqueActions.slice(0, 3).map((action) => action.item)
   };
+}
+
+function selectChecklistPeriod(now) {
+  const starts = getPeriodStartsAround(now);
+  const current = [...starts].reverse().find((period) => period.start <= now) ?? starts[0];
+  const next = starts.find((period) => period.start > now);
+
+  if (next) {
+    const minutesToNext = (next.start.getTime() - now.getTime()) / 60000;
+
+    if (minutesToNext <= PERIOD_PIVOT_MINUTES) {
+      return withPeriodEnd(next);
+    }
+  }
+
+  return withPeriodEnd(current);
+}
+
+function getPeriodStartsAround(now) {
+  const dayStart = new Date(now);
+  dayStart.setHours(0, 0, 0, 0);
+
+  const starts = [];
+
+  for (let dayOffset = -1; dayOffset <= 1; dayOffset += 1) {
+    CHECKLIST_PERIODS.forEach((period) => {
+      const start = new Date(dayStart);
+      start.setDate(dayStart.getDate() + dayOffset);
+      start.setHours(period.hour, 0, 0, 0);
+      starts.push({ ...period, start });
+    });
+  }
+
+  return starts.sort((a, b) => a.start - b.start);
+}
+
+function withPeriodEnd(period) {
+  const end = new Date(period.start);
+  end.setHours(end.getHours() + PERIOD_LENGTH_HOURS);
+
+  return { ...period, end };
+}
+
+function createPeriodWeather(weather, period) {
+  const hourly = Array.isArray(weather.hourly) ? weather.hourly : [];
+  const windowHours = hourly.filter((hour) => isWithinPeriod(hour, period));
+  const nearestHour = findNearestHour(hourly, period.start);
+  const periodHours = windowHours.length > 0 ? windowHours : [nearestHour].filter(Boolean);
+  const representative = nearestHour ?? weather.current ?? {};
+
+  if (periodHours.length === 0) {
+    return weather;
+  }
+
+  return {
+    ...weather,
+    current: {
+      ...weather.current,
+      time: representative.time ?? weather.current.time,
+      temperature: bestNumber(representative.temperature, weather.current.temperature),
+      feelsLike: bestNumber(representative.feelsLike, weather.current.feelsLike, weather.current.temperature),
+      precipitation: maxFromHours(periodHours, "precipitation", weather.current.precipitation),
+      rain: maxFromHours(periodHours, "rain", weather.current.rain),
+      showers: maxFromHours(periodHours, "showers", weather.current.showers),
+      snowfall: maxFromHours(periodHours, "snowfall", weather.current.snowfall),
+      weatherCode: bestNumber(representative.weatherCode, weather.current.weatherCode),
+      windSpeed: bestNumber(representative.windSpeed, weather.current.windSpeed)
+    },
+    daily: {
+      ...weather.daily,
+      weatherCode: getPeriodWeatherCode(periodHours, bestNumber(representative.weatherCode, weather.daily.weatherCode)),
+      high: maxFromHours(periodHours, "temperature", weather.daily.high),
+      low: minFromHours(periodHours, "temperature", weather.daily.low),
+      precipitationProbability: maxFromHours(periodHours, "precipitationProbability", weather.daily.precipitationProbability),
+      windMax: maxFromHours(periodHours, "windSpeed", weather.daily.windMax)
+    }
+  };
+}
+
+function isWithinPeriod(hour, period) {
+  const hourTime = parseForecastTime(hour.time);
+
+  return hourTime >= period.start && hourTime < period.end;
+}
+
+function findNearestHour(hourly, targetTime) {
+  return hourly.reduce((nearest, hour) => {
+    const hourTime = parseForecastTime(hour.time);
+    const distance = Math.abs(hourTime.getTime() - targetTime.getTime());
+
+    if (!nearest || distance < nearest.distance) {
+      return { hour, distance };
+    }
+
+    return nearest;
+  }, null)?.hour ?? null;
+}
+
+function maxFromHours(hours, key, fallback) {
+  const values = hours.map((hour) => hour[key]).filter((value) => Number.isFinite(value));
+
+  if (values.length === 0) {
+    return bestNumber(fallback, 0);
+  }
+
+  return Math.max(...values);
+}
+
+function minFromHours(hours, key, fallback) {
+  const values = hours.map((hour) => hour[key]).filter((value) => Number.isFinite(value));
+
+  if (values.length === 0) {
+    return bestNumber(fallback, 0);
+  }
+
+  return Math.min(...values);
+}
+
+function getPeriodWeatherCode(hours, fallback) {
+  const codes = hours.map((hour) => hour.weatherCode).filter((code) => Number.isFinite(code));
+
+  return codes.find((code) => hasCode(SNOW_CODES, code))
+    ?? codes.find((code) => hasCode(RAIN_CODES, code))
+    ?? codes[0]
+    ?? fallback;
+}
+
+function parseForecastTime(value) {
+  return new Date(value);
 }
 
 function bestNumber(...values) {
