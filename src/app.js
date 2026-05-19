@@ -6,6 +6,7 @@ import { createRecommendation, formatTemp } from "./recommendation.js";
 const elements = {
   appShell: document.querySelector(".app-shell"),
   statusPill: document.querySelector("#statusPill"),
+  screenTrack: document.querySelector("#screenTrack"),
   checklistTab: document.querySelector("#checklistTab"),
   weatherTab: document.querySelector("#weatherTab"),
   checklistScreen: document.querySelector("#checklistScreen"),
@@ -22,13 +23,16 @@ const elements = {
   windFact: document.querySelector("#windFact"),
   precipFact: document.querySelector("#precipFact"),
   conditionFact: document.querySelector("#conditionFact"),
-  lastUpdated: document.querySelector("#lastUpdated")
+  lastUpdatedFact: document.querySelector("#lastUpdatedFact"),
+  appStatus: document.querySelector("#appStatus")
 };
 
 elements.primaryAction.addEventListener("click", handleRecommendationRequest);
 elements.itemList.addEventListener("change", updateCompletionState);
 elements.checklistTab.addEventListener("click", () => showScreen("checklist"));
 elements.weatherTab.addEventListener("click", () => showScreen("weather"));
+elements.screenTrack.addEventListener("scroll", syncActiveScreenFromScroll, { passive: true });
+window.addEventListener("resize", () => syncActiveScreenFromScroll());
 registerServiceWorker();
 
 async function handleRecommendationRequest() {
@@ -80,7 +84,8 @@ function renderFacts(weather) {
   elements.windFact.textContent = `${Math.round(wind)} mph`;
   elements.precipFact.textContent = `${currentPrecip.toFixed(2)} in now`;
   elements.conditionFact.textContent = formatWeatherCode(bestNumber(weather.daily.weatherCode, weather.current.weatherCode));
-  elements.lastUpdated.textContent = `Last updated ${formatTime(weather.fetchedAt)}.`;
+  elements.lastUpdatedFact.textContent = formatTime(weather.fetchedAt);
+  elements.appStatus.textContent = "Checklist updated.";
 }
 
 function renderItems(items) {
@@ -103,7 +108,7 @@ function setLoading(label) {
   elements.reasonText.textContent = "Checking today's weather.";
   elements.primaryAction.disabled = true;
   elements.primaryAction.textContent = "Checking...";
-  elements.lastUpdated.textContent = "Location is used only for this forecast.";
+  elements.appStatus.textContent = "Location is used only for this forecast.";
   clearItems();
 }
 
@@ -119,7 +124,7 @@ function renderError(error) {
   elements.reasonText.textContent = copy.reason;
   elements.primaryAction.disabled = false;
   elements.primaryAction.textContent = "Try again";
-  elements.lastUpdated.textContent = copy.footer;
+  elements.appStatus.textContent = copy.footer;
   clearItems();
   resetFacts();
 }
@@ -227,13 +232,35 @@ function resetFacts() {
   elements.windFact.textContent = "--";
   elements.precipFact.textContent = "--";
   elements.conditionFact.textContent = "--";
+  elements.lastUpdatedFact.textContent = "--";
 }
 
 function showScreen(screenName) {
+  const target = screenName === "weather" ? elements.weatherScreen : elements.checklistScreen;
+
+  elements.screenTrack.scrollTo({
+    left: getScreenLeft(target),
+    behavior: "smooth"
+  });
+  setActiveScreen(screenName);
+}
+
+function syncActiveScreenFromScroll() {
+  const halfway = getScreenLeft(elements.weatherScreen) / 2;
+  const activeScreen = elements.screenTrack.scrollLeft > halfway ? "weather" : "checklist";
+
+  setActiveScreen(activeScreen);
+}
+
+function getScreenLeft(screen) {
+  const paddingLeft = Number.parseFloat(getComputedStyle(elements.screenTrack).paddingLeft) || 0;
+
+  return Math.max(0, screen.offsetLeft - elements.screenTrack.offsetLeft - paddingLeft);
+}
+
+function setActiveScreen(screenName) {
   const showChecklist = screenName === "checklist";
 
-  elements.checklistScreen.hidden = !showChecklist;
-  elements.weatherScreen.hidden = showChecklist;
   elements.checklistScreen.classList.toggle("is-active", showChecklist);
   elements.weatherScreen.classList.toggle("is-active", !showChecklist);
   elements.checklistTab.classList.toggle("is-active", showChecklist);
@@ -295,7 +322,7 @@ function registerServiceWorker() {
 
   window.addEventListener("load", () => {
     navigator.serviceWorker.register("./sw.js").catch(() => {
-      elements.lastUpdated.textContent = `${APP_CONFIG.appName} is running without offline cache.`;
+      elements.appStatus.textContent = `${APP_CONFIG.appName} is running without offline cache.`;
     });
   });
 }

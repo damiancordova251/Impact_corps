@@ -26,56 +26,62 @@
         <button class="screen-tab" id="weatherTab" type="button" aria-controls="weatherScreen" aria-selected="false">Weather</button>
       </nav>
 
-      <section class="recommendation-panel app-screen is-active" id="checklistScreen" aria-live="polite">
-        <img class="app-icon" src="icons/app-icon.svg" alt="">
-        <p class="kicker" id="kicker">Today</p>
-        <div class="checklist-heading">
-          <h1 class="recommendation-title" id="recommendationTitle">Morning Checklist:</h1>
-          <div class="completion-mark" id="completionMark" aria-hidden="true">&#10003;</div>
-        </div>
-        <p class="reason" id="reasonText">Ready when you are.</p>
-        <ul class="item-list" id="itemList" aria-label="Morning checklist"></ul>
-        <button class="primary-action" id="primaryAction" type="button">Use current location</button>
-      </section>
+      <div class="screen-track" id="screenTrack">
+        <section class="recommendation-panel app-screen is-active" id="checklistScreen" aria-live="polite">
+          <img class="app-icon" src="icons/app-icon.svg" alt="">
+          <p class="kicker" id="kicker">Today</p>
+          <div class="checklist-heading">
+            <h1 class="recommendation-title" id="recommendationTitle">Morning Checklist:</h1>
+            <div class="completion-mark" id="completionMark" aria-hidden="true">&#10003;</div>
+          </div>
+          <p class="reason" id="reasonText">Ready when you are.</p>
+          <ul class="item-list" id="itemList" aria-label="Morning checklist"></ul>
+          <button class="primary-action" id="primaryAction" type="button">Use current location</button>
+        </section>
 
-      <section class="weather-screen app-screen" id="weatherScreen" aria-label="Weather details" hidden>
-        <div class="weather-hero">
-          <p class="kicker">Weather Details</p>
-          <h1 class="temperature-title" id="temperatureTitle">--</h1>
-          <div class="temperature-summary">
-            <div>
-              <span>High / low</span>
-              <strong id="rangeFact">--</strong>
-            </div>
-            <div>
-              <span>Feels like</span>
-              <strong id="feelsFact">--</strong>
+        <section class="weather-screen app-screen" id="weatherScreen" aria-label="Weather details">
+          <div class="weather-hero">
+            <p class="kicker">Weather Details</p>
+            <h1 class="temperature-title" id="temperatureTitle">--</h1>
+            <div class="temperature-summary">
+              <div>
+                <span>High / low</span>
+                <strong id="rangeFact">--</strong>
+              </div>
+              <div>
+                <span>Feels like</span>
+                <strong id="feelsFact">--</strong>
+              </div>
             </div>
           </div>
-        </div>
 
-        <div class="weather-detail-list">
-          <section class="weather-detail-section" aria-label="Rain">
-            <span>Rain</span>
-            <strong id="rainFact">--</strong>
-          </section>
-          <section class="weather-detail-section" aria-label="Wind">
-            <span>Wind</span>
-            <strong id="windFact">--</strong>
-          </section>
-          <section class="weather-detail-section" aria-label="Current precipitation">
-            <span>Current precipitation</span>
-            <strong id="precipFact">--</strong>
-          </section>
-          <section class="weather-detail-section" aria-label="Conditions">
-            <span>Conditions</span>
-            <strong id="conditionFact">--</strong>
-          </section>
-        </div>
-      </section>
+          <div class="weather-detail-list">
+            <section class="weather-detail-section" aria-label="Rain">
+              <span>Rain chance</span>
+              <strong id="rainFact">--</strong>
+            </section>
+            <section class="weather-detail-section" aria-label="Current precipitation">
+              <span>Current precipitation</span>
+              <strong id="precipFact">--</strong>
+            </section>
+            <section class="weather-detail-section" aria-label="Wind">
+              <span>Wind</span>
+              <strong id="windFact">--</strong>
+            </section>
+            <section class="weather-detail-section" aria-label="Conditions">
+              <span>Conditions</span>
+              <strong id="conditionFact">--</strong>
+            </section>
+            <section class="weather-detail-section" aria-label="Last updated">
+              <span>Last updated</span>
+              <strong id="lastUpdatedFact">--</strong>
+            </section>
+          </div>
+        </section>
+      </div>
 
       <footer class="footer-note">
-        <p id="lastUpdated">Location is used only for this forecast.</p>
+        <p id="appStatus">Location is used only for this forecast.</p>
       </footer>
     </main>
   </body>

@@ -99,8 +99,28 @@ button {
   color: #ffffff;
 }
 
-.app-screen[hidden] {
+.screen-track {
+  width: calc(100% + 36px);
+  margin: 0 -18px;
+  padding: 0 18px 8px;
+  display: flex;
+  gap: 16px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  scroll-behavior: smooth;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.screen-track::-webkit-scrollbar {
   display: none;
+}
+
+.app-screen {
+  width: 100%;
+  min-width: 100%;
+  scroll-snap-align: start;
 }
 
 .recommendation-panel {
@@ -110,6 +130,7 @@ button {
   padding: 24px 20px 20px;
   background: var(--surface);
   box-shadow: var(--shadow);
+  text-align: left;
 }
 
 .app-icon {
@@ -117,6 +138,8 @@ button {
   height: 70px;
   display: block;
   margin-bottom: 22px;
+  margin-left: 0;
+  margin-right: 0;
 }
 
 .kicker {
@@ -132,6 +155,7 @@ button {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
+  text-align: left;
 }
 
 .recommendation-title {
@@ -141,6 +165,7 @@ button {
   font-size: clamp(2rem, 10vw, 2.75rem);
   line-height: 1.02;
   letter-spacing: 0;
+  text-align: left;
 }
 
 .completion-mark {
@@ -173,6 +198,7 @@ button {
   color: var(--muted);
   font-size: 1.04rem;
   line-height: 1.45;
+  text-align: left;
 }
 
 .item-list {
@@ -205,6 +231,7 @@ button {
   background: #ffffff;
   color: var(--text);
   cursor: pointer;
+  text-align: left;
 }
 
 .checklist-row input {
@@ -256,6 +283,31 @@ button {
   color: var(--accent-strong);
   font-size: 1rem;
   font-weight: 800;
+  text-align: left;
+}
+
+#checklistScreen {
+  display: block;
+  text-align: left;
+}
+
+#checklistScreen .app-icon {
+  margin-left: 0;
+  margin-right: auto;
+}
+
+#checklistScreen .kicker,
+#checklistScreen .recommendation-title,
+#checklistScreen .reason {
+  display: block;
+  width: 100%;
+  text-align: left;
+}
+
+#checklistScreen .checklist-heading {
+  width: 100%;
+  justify-content: space-between;
+  text-align: left;
 }
 
 .primary-action {
@@ -285,16 +337,17 @@ button {
   background: var(--surface);
   box-shadow: var(--shadow);
   overflow: hidden;
+  text-align: center;
 }
 
 .weather-hero {
-  padding: 24px 20px 18px;
+  padding: 34px 22px 28px;
 }
 
 .temperature-title {
-  margin: 8px 0 18px;
+  margin: 12px 0 28px;
   color: var(--text);
-  font-size: clamp(4.4rem, 24vw, 6.4rem);
+  font-size: clamp(5.4rem, 30vw, 7.8rem);
   line-height: 0.92;
   letter-spacing: 0;
 }
@@ -302,13 +355,13 @@ button {
 .temperature-summary {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 14px;
+  gap: 16px;
 }
 
 .temperature-summary div {
   border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 13px;
+  padding: 18px 14px;
   background: var(--bg);
 }
 
@@ -316,32 +369,41 @@ button {
 .weather-detail-section span {
   display: block;
   color: var(--muted);
-  font-size: 0.85rem;
+  font-size: 0.9rem;
   font-weight: 700;
 }
 
 .temperature-summary strong,
 .weather-detail-section strong {
   display: block;
-  margin-top: 6px;
+  margin-top: 8px;
   color: var(--text);
-  font-size: 1.18rem;
+  font-size: 1.35rem;
   font-weight: 850;
 }
 
 .weather-detail-list {
   border-top: 1px solid var(--line);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  background: var(--bg);
 }
 
 .weather-detail-section {
-  min-height: 76px;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--line);
+  min-height: 98px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
   background: #ffffff;
 }
 
 .weather-detail-section:last-child {
-  border-bottom: 0;
+  border-bottom: 1px solid var(--line);
 }
 
 .footer-note {
