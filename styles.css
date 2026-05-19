@@ -331,6 +331,51 @@ button {
   opacity: 0.72;
 }
 
+.settings-panel {
+  margin-top: 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0;
+  background: rgba(245, 247, 251, 0.8);
+}
+
+.settings-panel summary {
+  min-height: 46px;
+  padding: 13px 14px;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.routine-start-setting {
+  border-top: 1px solid var(--line);
+  padding: 14px 14px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.routine-start-setting span {
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.routine-start-setting strong {
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.routine-start-slider {
+  width: calc(100% - 28px);
+  margin: 0 14px 16px;
+  accent-color: var(--accent);
+}
+
 .weather-screen {
   border: 1px solid var(--line);
   border-radius: 8px;

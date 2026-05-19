@@ -4,10 +4,15 @@ import { fetchTodayWeather, WeatherFetchError } from "./weather.js";
 import {
   buildPeriodWeather,
   createRecommendation,
+  DEFAULT_ROUTINE_START_MINUTES,
   formatTemp,
   getActivePeriod,
   getPeriodForecast
 } from "./recommendation.js";
+
+const ROUTINE_START_STORAGE_KEY = "morningWearRoutineStartMinutes";
+const LEGACY_WAKE_TIME_STORAGE_KEY = "morningWearWakeTimeMinutes";
+const ROUTINE_START_STEP_MINUTES = 30;
 
 const elements = {
   appShell: document.querySelector(".app-shell"),
@@ -30,7 +35,13 @@ const elements = {
   precipFact: document.querySelector("#precipFact"),
   conditionFact: document.querySelector("#conditionFact"),
   lastUpdatedFact: document.querySelector("#lastUpdatedFact"),
+  routineStartInput: document.querySelector("#routineStartInput"),
+  routineStartValue: document.querySelector("#routineStartValue"),
   appStatus: document.querySelector("#appStatus")
+};
+
+const state = {
+  latestWeather: null
 };
 
 elements.primaryAction.addEventListener("click", handleRecommendationRequest);
@@ -38,7 +49,9 @@ elements.itemList.addEventListener("change", updateCompletionState);
 elements.checklistTab.addEventListener("click", () => showScreen("checklist"));
 elements.weatherTab.addEventListener("click", () => showScreen("weather"));
 elements.screenTrack.addEventListener("scroll", syncActiveScreenFromScroll, { passive: true });
+elements.routineStartInput.addEventListener("input", handleRoutineStartChange);
 window.addEventListener("resize", () => syncActiveScreenFromScroll());
+initializeRoutineStartSetting();
 registerServiceWorker();
 
 async function handleRecommendationRequest() {
@@ -51,22 +64,27 @@ async function handleRecommendationRequest() {
     setLoading("Checking weather");
 
     const weather = await fetchTodayWeather(location);
-    const activePeriod = getActivePeriod(requestedAt);
-    const periodForecast = getPeriodForecast(weather, activePeriod);
-    const periodWeather = buildPeriodWeather(weather, periodForecast);
-    const recommendation = createRecommendation(periodWeather);
-
-    renderRecommendation(weather, recommendation);
+    state.latestWeather = weather;
+    renderPeriodRecommendation(weather, requestedAt);
   } catch (error) {
     renderError(error);
   }
+}
+
+function renderPeriodRecommendation(weather, requestedAt = new Date()) {
+  const activePeriod = getActivePeriod(requestedAt, getSavedRoutineStartTime());
+  const periodForecast = getPeriodForecast(weather, activePeriod);
+  const periodWeather = buildPeriodWeather(weather, periodForecast);
+  const recommendation = createRecommendation(periodWeather);
+
+  renderRecommendation(weather, recommendation);
 }
 
 function renderRecommendation(weather, recommendation) {
   elements.appShell.classList.remove("is-error", "is-warning", "is-complete");
   elements.statusPill.textContent = "Updated";
   elements.kicker.textContent = "Today";
-  elements.recommendationTitle.textContent = recommendation.checklistTitle ?? "Morning Checklist:";
+  elements.recommendationTitle.textContent = recommendation.checklistTitle ?? "Checklist:";
   elements.reasonText.textContent = getChecklistPrompt(recommendation.items);
   elements.primaryAction.disabled = false;
   elements.primaryAction.textContent = "Refresh";
@@ -115,7 +133,7 @@ function setLoading(label) {
   elements.appShell.classList.remove("is-error", "is-warning", "is-complete");
   elements.statusPill.textContent = "Loading";
   elements.kicker.textContent = label;
-  elements.recommendationTitle.textContent = "Morning Checklist:";
+  elements.recommendationTitle.textContent = "Checklist:";
   elements.reasonText.textContent = "Checking today's weather.";
   elements.primaryAction.disabled = true;
   elements.primaryAction.textContent = "Checking...";
@@ -244,6 +262,75 @@ function resetFacts() {
   elements.precipFact.textContent = "--";
   elements.conditionFact.textContent = "--";
   elements.lastUpdatedFact.textContent = "--";
+}
+
+function initializeRoutineStartSetting() {
+  const routineStartTime = getSavedRoutineStartTime();
+
+  elements.routineStartInput.value = String(routineStartTime / ROUTINE_START_STEP_MINUTES);
+  elements.routineStartValue.textContent = formatTimeLabel(routineStartTime);
+}
+
+function handleRoutineStartChange() {
+  const routineStartTime = Number(elements.routineStartInput.value) * ROUTINE_START_STEP_MINUTES;
+
+  saveRoutineStartTime(routineStartTime);
+  elements.routineStartValue.textContent = formatTimeLabel(routineStartTime);
+  elements.appStatus.textContent = `Routine start saved for ${formatTimeLabel(routineStartTime)}.`;
+
+  if (state.latestWeather) {
+    renderPeriodRecommendation(state.latestWeather);
+  }
+}
+
+function getSavedRoutineStartTime() {
+  try {
+    const storedValue = window.localStorage.getItem(ROUTINE_START_STORAGE_KEY)
+      ?? window.localStorage.getItem(LEGACY_WAKE_TIME_STORAGE_KEY);
+
+    if (storedValue === null) {
+      return DEFAULT_ROUTINE_START_MINUTES;
+    }
+
+    const savedValue = Number(storedValue);
+
+    if (isValidRoutineStartTime(savedValue)) {
+      return savedValue;
+    }
+  } catch (error) {
+    return DEFAULT_ROUTINE_START_MINUTES;
+  }
+
+  return DEFAULT_ROUTINE_START_MINUTES;
+}
+
+function saveRoutineStartTime(routineStartTime) {
+  if (!isValidRoutineStartTime(routineStartTime)) {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(ROUTINE_START_STORAGE_KEY, String(routineStartTime));
+  } catch (error) {
+    elements.appStatus.textContent = "Start time could not be saved.";
+  }
+}
+
+function isValidRoutineStartTime(value) {
+  return Number.isInteger(value)
+    && value >= 0
+    && value < 24 * 60
+    && value % ROUTINE_START_STEP_MINUTES === 0;
+}
+
+function formatTimeLabel(minutes) {
+  const date = new Date();
+  date.setHours(0, minutes, 0, 0);
+
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit"
+  }).format(date);
 }
 
 function showScreen(screenName) {

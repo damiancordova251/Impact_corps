@@ -1,8 +1,10 @@
 const RAIN_CODES = new Set([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99]);
 const SNOW_CODES = new Set([71, 73, 75, 77, 85, 86]);
 const SUNNY_CODES = new Set([0, 1, 2]);
+const MINUTES_PER_DAY = 24 * 60;
 const PERIOD_PIVOT_MINUTES = 60;
-const PERIOD_LENGTH_HOURS = 6;
+const PERIOD_LENGTH_MINUTES = 8 * 60;
+export const DEFAULT_ROUTINE_START_MINUTES = 6 * 60;
 const MAX_CHECKLIST_ITEMS = 6;
 const RAIN_PROBABILITY_THRESHOLD = 40;
 const MEANINGFUL_RAIN_PROBABILITY = 75;
@@ -15,14 +17,13 @@ const WINDY_MPH = 24;
 const COLD_WIND_MPH = 18;
 const HOT_TEMP = 86;
 const CHECKLIST_PERIODS = [
-  { key: "midnight", label: "Midnight", hour: 0 },
-  { key: "morning", label: "Morning", hour: 6 },
-  { key: "afternoon", label: "Afternoon", hour: 12 },
-  { key: "evening", label: "Evening", hour: 18 }
+  { key: "morning", label: "Morning", anchorMinute: 6 * 60 },
+  { key: "afternoon", label: "Afternoon", anchorMinute: 14 * 60 },
+  { key: "night", label: "Night", anchorMinute: 22 * 60 }
 ];
 
-export function getActivePeriod(now = new Date()) {
-  const starts = getPeriodStartsAround(now);
+export function getActivePeriod(now = new Date(), routineStartMinutes = DEFAULT_ROUTINE_START_MINUTES) {
+  const starts = getPeriodStartsAround(now, routineStartMinutes);
   const current = [...starts].reverse().find((period) => period.start <= now) ?? starts[0];
   const next = starts.find((period) => period.start > now);
 
@@ -35,6 +36,32 @@ export function getActivePeriod(now = new Date()) {
   }
 
   return withPeriodEnd(current);
+}
+
+export function buildPeriodSchedule(routineStartMinutes = DEFAULT_ROUTINE_START_MINUTES) {
+  const startMinute = normalizeMinute(routineStartMinutes);
+  const anchorPeriod = getClosestAnchorPeriod(startMinute);
+  const shiftMinutes = getSignedMinuteDelta(startMinute, anchorPeriod.anchorMinute);
+
+  return CHECKLIST_PERIODS.map((period) => ({
+    ...period,
+    startMinute: normalizeMinute(period.anchorMinute + shiftMinutes)
+  }));
+}
+
+export function getClosestAnchorPeriod(routineStartMinutes = DEFAULT_ROUTINE_START_MINUTES) {
+  const startMinute = normalizeMinute(routineStartMinutes);
+
+  return CHECKLIST_PERIODS.reduce((closest, period) => {
+    const delta = getSignedMinuteDelta(startMinute, period.anchorMinute);
+    const distance = Math.abs(delta);
+
+    if (!closest || distance < closest.distance || (distance === closest.distance && delta >= 0 && closest.delta < 0)) {
+      return { period, distance, delta };
+    }
+
+    return closest;
+  }, null).period;
 }
 
 export function getPeriodForecast(weather, period) {
@@ -206,17 +233,18 @@ export function createRecommendation(periodWeather) {
   };
 }
 
-function getPeriodStartsAround(now) {
+function getPeriodStartsAround(now, routineStartMinutes) {
   const dayStart = new Date(now);
   dayStart.setHours(0, 0, 0, 0);
 
   const starts = [];
+  const schedule = buildPeriodSchedule(routineStartMinutes);
 
-  for (let dayOffset = -1; dayOffset <= 1; dayOffset += 1) {
-    CHECKLIST_PERIODS.forEach((period) => {
+  for (let dayOffset = -1; dayOffset <= 2; dayOffset += 1) {
+    schedule.forEach((period) => {
       const start = new Date(dayStart);
       start.setDate(dayStart.getDate() + dayOffset);
-      start.setHours(period.hour, 0, 0, 0);
+      start.setMinutes(period.startMinute);
       starts.push({ ...period, start });
     });
   }
@@ -226,9 +254,23 @@ function getPeriodStartsAround(now) {
 
 function withPeriodEnd(period) {
   const end = new Date(period.start);
-  end.setHours(end.getHours() + PERIOD_LENGTH_HOURS);
+  end.setMinutes(end.getMinutes() + PERIOD_LENGTH_MINUTES);
 
   return { ...period, end };
+}
+
+function normalizeMinute(minutes) {
+  return ((minutes % MINUTES_PER_DAY) + MINUTES_PER_DAY) % MINUTES_PER_DAY;
+}
+
+function getSignedMinuteDelta(targetMinute, anchorMinute) {
+  const delta = normalizeMinute(targetMinute - anchorMinute);
+
+  if (delta > MINUTES_PER_DAY / 2) {
+    return delta - MINUTES_PER_DAY;
+  }
+
+  return delta;
 }
 
 function getChecklistTitle(period) {
@@ -247,14 +289,14 @@ function shouldRecommendSunProtection(weather, period, conditions) {
 }
 
 function isDaylightPeriod(period) {
-  return ["morning", "afternoon", "evening"].includes(period?.key);
+  return ["morning", "afternoon"].includes(period?.key);
 }
 
 function isFullyOvernightForecast(weather) {
   const hours = weather.checklistForecast?.usableHours ?? [];
 
   if (hours.length === 0) {
-    return weather.checklistPeriod?.key === "midnight";
+    return weather.checklistPeriod?.key === "night";
   }
 
   return hours.every((hour) => {
