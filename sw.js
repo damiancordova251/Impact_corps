@@ -1,4 +1,4 @@
-const CACHE_NAME = "morning-wear-v1";
+const CACHE_NAME = "morning-wear-v2";
 const APP_SHELL = [
   "./",
   "./index.html",
@@ -8,6 +8,8 @@ const APP_SHELL = [
   "./src/app.js",
   "./src/config.js",
   "./src/location.js",
+  "./src/notifications.js",
+  "./src/reminders.js",
   "./src/weather.js",
   "./src/recommendation.js"
 ];
@@ -43,3 +45,33 @@ self.addEventListener("fetch", (event) => {
     caches.match(event.request).then((cached) => cached || fetch(event.request))
   );
 });
+
+self.addEventListener("notificationclick", (event) => {
+  event.notification.close();
+
+  event.waitUntil(openOrFocusApp(event.notification.data?.url));
+});
+
+async function openOrFocusApp(notificationUrl = "./") {
+  const targetUrl = new URL(notificationUrl, self.registration.scope).href;
+  const windowClients = await self.clients.matchAll({
+    type: "window",
+    includeUncontrolled: true
+  });
+
+  const matchingClient = windowClients.find((client) => {
+    const clientUrl = new URL(client.url);
+
+    return clientUrl.origin === new URL(targetUrl).origin;
+  });
+
+  if (matchingClient) {
+    return matchingClient.focus();
+  }
+
+  if (self.clients.openWindow) {
+    return self.clients.openWindow(targetUrl);
+  }
+
+  return null;
+}

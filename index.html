@@ -44,6 +44,17 @@
               <strong id="routineStartValue">6:00 AM</strong>
             </label>
             <input id="routineStartInput" class="routine-start-slider" type="range" min="0" max="47" step="1" value="12">
+            <section class="notification-setting" aria-label="Checklist reminder settings">
+              <div class="setting-copy">
+                <span>Checklist reminders</span>
+                <p id="notificationStatus">Daily scheduled reminders will be added next.</p>
+                <p id="notificationRoutineNote">Future reminders will use your 6:00 AM routine start.</p>
+              </div>
+              <div class="notification-actions">
+                <button class="secondary-action" id="enableNotificationsButton" type="button">Enable reminders</button>
+                <button class="secondary-action" id="testNotificationButton" type="button" disabled>Send test</button>
+              </div>
+            </section>
           </details>
         </section>
 

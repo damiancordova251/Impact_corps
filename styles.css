@@ -376,6 +376,54 @@ button {
   accent-color: var(--accent);
 }
 
+.notification-setting {
+  border-top: 1px solid var(--line);
+  padding: 14px;
+}
+
+.setting-copy span {
+  display: block;
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 850;
+}
+
+.setting-copy p {
+  margin: 7px 0 0;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 650;
+  line-height: 1.35;
+}
+
+.notification-actions {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+.secondary-action {
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 0 12px;
+  background: #ffffff;
+  color: var(--text);
+  font-size: 0.88rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.secondary-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
+
+.secondary-action:not(:disabled):active {
+  transform: translateY(1px);
+}
+
 .weather-screen {
   border: 1px solid var(--line);
   border-radius: 8px;

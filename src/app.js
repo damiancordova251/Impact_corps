@@ -1,5 +1,15 @@
 import { APP_CONFIG } from "./config.js";
 import { getCurrentLocation, LocationAccessError } from "./location.js";
+import {
+  getNotificationEnvironment,
+  requestNotificationPermission,
+  sendTestNotification
+} from "./notifications.js";
+import {
+  createChecklistReminder,
+  getRoutineReminderCopy,
+  REMINDER_COPY
+} from "./reminders.js";
 import { fetchTodayWeather, WeatherFetchError } from "./weather.js";
 import {
   buildWindowWeather,
@@ -36,6 +46,10 @@ const elements = {
   lastUpdatedFact: document.querySelector("#lastUpdatedFact"),
   routineStartInput: document.querySelector("#routineStartInput"),
   routineStartValue: document.querySelector("#routineStartValue"),
+  notificationStatus: document.querySelector("#notificationStatus"),
+  notificationRoutineNote: document.querySelector("#notificationRoutineNote"),
+  enableNotificationsButton: document.querySelector("#enableNotificationsButton"),
+  testNotificationButton: document.querySelector("#testNotificationButton"),
   appStatus: document.querySelector("#appStatus")
 };
 
@@ -45,8 +59,11 @@ elements.checklistTab.addEventListener("click", () => showScreen("checklist"));
 elements.weatherTab.addEventListener("click", () => showScreen("weather"));
 elements.screenTrack.addEventListener("scroll", syncActiveScreenFromScroll, { passive: true });
 elements.routineStartInput.addEventListener("input", handleRoutineStartChange);
+elements.enableNotificationsButton.addEventListener("click", handleEnableNotifications);
+elements.testNotificationButton.addEventListener("click", handleTestNotification);
 window.addEventListener("resize", () => syncActiveScreenFromScroll());
 initializeRoutineStartSetting();
+initializeNotificationSetting();
 registerServiceWorker();
 
 async function handleRecommendationRequest() {
@@ -265,7 +282,100 @@ function handleRoutineStartChange() {
 
   saveRoutineStartTime(routineStartTime);
   elements.routineStartValue.textContent = formatTimeLabel(routineStartTime);
+  renderNotificationSetting();
   elements.appStatus.textContent = `Routine start saved for ${formatTimeLabel(routineStartTime)}.`;
+}
+
+function initializeNotificationSetting() {
+  renderNotificationSetting();
+}
+
+async function handleEnableNotifications() {
+  renderNotificationSetting("Requesting notification permission...");
+
+  const permission = await requestNotificationPermission();
+
+  if (permission === "granted") {
+    renderNotificationSetting("Notifications enabled. You can send a test notification now.");
+    return;
+  }
+
+  if (permission === "denied") {
+    renderNotificationSetting("Notifications are blocked. Update browser or iPhone settings to enable them.");
+    return;
+  }
+
+  if (permission === "default") {
+    renderNotificationSetting("Notification permission was not granted. Tap Enable reminders to try again.");
+    return;
+  }
+
+  renderNotificationSetting("Notifications are not supported in this browser.");
+}
+
+async function handleTestNotification() {
+  elements.testNotificationButton.disabled = true;
+
+  try {
+    await sendTestNotification(createChecklistReminder());
+    renderNotificationSetting("Test notification sent.");
+  } catch (error) {
+    renderNotificationSetting(error.message);
+  }
+}
+
+function renderNotificationSetting(statusOverride = null) {
+  const environment = getNotificationEnvironment();
+  const routineStartLabel = formatTimeLabel(getSavedRoutineStartTime());
+
+  elements.notificationRoutineNote.textContent = getRoutineReminderCopy(routineStartLabel);
+
+  if (!environment.supported) {
+    elements.notificationStatus.textContent = statusOverride
+      ?? getUnsupportedNotificationStatus(environment);
+    elements.enableNotificationsButton.textContent = "Unavailable";
+    elements.enableNotificationsButton.disabled = true;
+    elements.testNotificationButton.disabled = true;
+    return;
+  }
+
+  elements.enableNotificationsButton.disabled = environment.permission === "granted"
+    || environment.permission === "denied";
+  elements.testNotificationButton.disabled = environment.permission !== "granted";
+
+  if (environment.permission === "granted") {
+    elements.enableNotificationsButton.textContent = "Enabled";
+    elements.notificationStatus.textContent = statusOverride
+      ?? `Notifications are enabled. ${REMINDER_COPY.scheduledLater}`;
+    return;
+  }
+
+  if (environment.permission === "denied") {
+    elements.enableNotificationsButton.textContent = "Blocked";
+    elements.notificationStatus.textContent = statusOverride
+      ?? "Notifications are blocked. Update browser or iPhone settings to enable them.";
+    return;
+  }
+
+  elements.enableNotificationsButton.textContent = "Enable reminders";
+  elements.notificationStatus.textContent = statusOverride
+    ?? getDefaultNotificationStatus(environment);
+}
+
+function getUnsupportedNotificationStatus(environment) {
+  if (environment.needsHomeScreenInstall) {
+    return "Notifications are not supported here yet. On iPhone, install the PWA to the Home Screen and open it there.";
+  }
+
+  return "Notifications are not supported in this browser.";
+}
+
+function getDefaultNotificationStatus(environment) {
+  if (environment.needsHomeScreenInstall) {
+    return `On iPhone, install this PWA to the Home Screen before enabling reminders. ${REMINDER_COPY.scheduledLater}`;
+  }
+
+  return `Notifications are supported. Tap Enable reminders to request permission. ${REMINDER_COPY.scheduledLater}`;
 }
 
 function getSavedRoutineStartTime() {
