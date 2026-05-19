@@ -21,7 +21,12 @@
         <p class="status-pill" id="statusPill">Ready</p>
       </header>
 
-      <section class="recommendation-panel" aria-live="polite">
+      <nav class="screen-nav" aria-label="App screens">
+        <button class="screen-tab is-active" id="checklistTab" type="button" aria-controls="checklistScreen" aria-selected="true">Checklist</button>
+        <button class="screen-tab" id="weatherTab" type="button" aria-controls="weatherScreen" aria-selected="false">Weather</button>
+      </nav>
+
+      <section class="recommendation-panel app-screen is-active" id="checklistScreen" aria-live="polite">
         <img class="app-icon" src="icons/app-icon.svg" alt="">
         <p class="kicker" id="kicker">Today</p>
         <div class="checklist-heading">
@@ -33,22 +38,39 @@
         <button class="primary-action" id="primaryAction" type="button">Use current location</button>
       </section>
 
-      <section class="facts-section" aria-label="Key weather facts">
-        <div class="fact-row">
-          <span>Feels like</span>
-          <strong id="feelsFact">--</strong>
+      <section class="weather-screen app-screen" id="weatherScreen" aria-label="Weather details" hidden>
+        <div class="weather-hero">
+          <p class="kicker">Weather Details</p>
+          <h1 class="temperature-title" id="temperatureTitle">--</h1>
+          <div class="temperature-summary">
+            <div>
+              <span>High / low</span>
+              <strong id="rangeFact">--</strong>
+            </div>
+            <div>
+              <span>Feels like</span>
+              <strong id="feelsFact">--</strong>
+            </div>
+          </div>
         </div>
-        <div class="fact-row">
-          <span>High / low</span>
-          <strong id="rangeFact">--</strong>
-        </div>
-        <div class="fact-row">
-          <span>Rain chance</span>
-          <strong id="rainFact">--</strong>
-        </div>
-        <div class="fact-row">
-          <span>Wind</span>
-          <strong id="windFact">--</strong>
+
+        <div class="weather-detail-list">
+          <section class="weather-detail-section" aria-label="Rain">
+            <span>Rain</span>
+            <strong id="rainFact">--</strong>
+          </section>
+          <section class="weather-detail-section" aria-label="Wind">
+            <span>Wind</span>
+            <strong id="windFact">--</strong>
+          </section>
+          <section class="weather-detail-section" aria-label="Current precipitation">
+            <span>Current precipitation</span>
+            <strong id="precipFact">--</strong>
+          </section>
+          <section class="weather-detail-section" aria-label="Conditions">
+            <span>Conditions</span>
+            <strong id="conditionFact">--</strong>
+          </section>
         </div>
       </section>
 

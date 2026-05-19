@@ -73,6 +73,36 @@ button {
   text-align: center;
 }
 
+.screen-nav {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 4px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.screen-tab {
+  min-height: 42px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.9rem;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.screen-tab.is-active {
+  background: var(--text);
+  color: #ffffff;
+}
+
+.app-screen[hidden] {
+  display: none;
+}
+
 .recommendation-panel {
   position: relative;
   border: 1px solid var(--line);
@@ -249,37 +279,69 @@ button {
   opacity: 0.72;
 }
 
-.facts-section {
+.weather-screen {
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--surface);
+  box-shadow: var(--shadow);
   overflow: hidden;
 }
 
-.fact-row {
-  min-height: 58px;
-  padding: 14px 16px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 14px;
-  border-bottom: 1px solid var(--line);
+.weather-hero {
+  padding: 24px 20px 18px;
 }
 
-.fact-row:last-child {
-  border-bottom: 0;
-}
-
-.fact-row span {
-  color: var(--muted);
-  font-size: 0.95rem;
-}
-
-.fact-row strong {
+.temperature-title {
+  margin: 8px 0 18px;
   color: var(--text);
-  font-size: 1rem;
-  text-align: right;
-  white-space: nowrap;
+  font-size: clamp(4.4rem, 24vw, 6.4rem);
+  line-height: 0.92;
+  letter-spacing: 0;
+}
+
+.temperature-summary {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.temperature-summary div {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 13px;
+  background: var(--bg);
+}
+
+.temperature-summary span,
+.weather-detail-section span {
+  display: block;
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 700;
+}
+
+.temperature-summary strong,
+.weather-detail-section strong {
+  display: block;
+  margin-top: 6px;
+  color: var(--text);
+  font-size: 1.18rem;
+  font-weight: 850;
+}
+
+.weather-detail-list {
+  border-top: 1px solid var(--line);
+}
+
+.weather-detail-section {
+  min-height: 76px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--line);
+  background: #ffffff;
+}
+
+.weather-detail-section:last-child {
+  border-bottom: 0;
 }
 
 .footer-note {

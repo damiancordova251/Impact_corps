@@ -6,20 +6,29 @@ import { createRecommendation, formatTemp } from "./recommendation.js";
 const elements = {
   appShell: document.querySelector(".app-shell"),
   statusPill: document.querySelector("#statusPill"),
+  checklistTab: document.querySelector("#checklistTab"),
+  weatherTab: document.querySelector("#weatherTab"),
+  checklistScreen: document.querySelector("#checklistScreen"),
+  weatherScreen: document.querySelector("#weatherScreen"),
   kicker: document.querySelector("#kicker"),
   recommendationTitle: document.querySelector("#recommendationTitle"),
   reasonText: document.querySelector("#reasonText"),
   itemList: document.querySelector("#itemList"),
   primaryAction: document.querySelector("#primaryAction"),
+  temperatureTitle: document.querySelector("#temperatureTitle"),
   feelsFact: document.querySelector("#feelsFact"),
   rangeFact: document.querySelector("#rangeFact"),
   rainFact: document.querySelector("#rainFact"),
   windFact: document.querySelector("#windFact"),
+  precipFact: document.querySelector("#precipFact"),
+  conditionFact: document.querySelector("#conditionFact"),
   lastUpdated: document.querySelector("#lastUpdated")
 };
 
 elements.primaryAction.addEventListener("click", handleRecommendationRequest);
 elements.itemList.addEventListener("change", updateCompletionState);
+elements.checklistTab.addEventListener("click", () => showScreen("checklist"));
+elements.weatherTab.addEventListener("click", () => showScreen("weather"));
 registerServiceWorker();
 
 async function handleRecommendationRequest() {
@@ -53,19 +62,24 @@ function renderRecommendation(weather, recommendation) {
 }
 
 function renderFacts(weather) {
+  const currentTemp = bestNumber(weather.current.temperature, weather.daily.high);
   const feelsLike = bestNumber(weather.current.feelsLike, weather.current.temperature);
   const high = bestNumber(weather.daily.high, weather.current.temperature);
   const low = bestNumber(weather.daily.low, weather.current.temperature);
   const rainChance = bestNumber(weather.daily.precipitationProbability, 0);
+  const currentPrecip = bestNumber(weather.current.precipitation, 0);
   const wind = Math.max(
     bestNumber(weather.current.windSpeed, 0),
     bestNumber(weather.daily.windMax, 0)
   );
 
+  elements.temperatureTitle.textContent = formatTemp(currentTemp);
   elements.feelsFact.textContent = formatTemp(feelsLike);
   elements.rangeFact.textContent = `${formatTemp(high)} / ${formatTemp(low)}`;
-  elements.rainFact.textContent = `${Math.round(rainChance)}%`;
+  elements.rainFact.textContent = `${Math.round(rainChance)}% chance`;
   elements.windFact.textContent = `${Math.round(wind)} mph`;
+  elements.precipFact.textContent = `${currentPrecip.toFixed(2)} in now`;
+  elements.conditionFact.textContent = formatWeatherCode(bestNumber(weather.daily.weatherCode, weather.current.weatherCode));
   elements.lastUpdated.textContent = `Last updated ${formatTime(weather.fetchedAt)}.`;
 }
 
@@ -206,10 +220,26 @@ function getErrorCopy(error) {
 }
 
 function resetFacts() {
+  elements.temperatureTitle.textContent = "--";
   elements.feelsFact.textContent = "--";
   elements.rangeFact.textContent = "--";
   elements.rainFact.textContent = "--";
   elements.windFact.textContent = "--";
+  elements.precipFact.textContent = "--";
+  elements.conditionFact.textContent = "--";
+}
+
+function showScreen(screenName) {
+  const showChecklist = screenName === "checklist";
+
+  elements.checklistScreen.hidden = !showChecklist;
+  elements.weatherScreen.hidden = showChecklist;
+  elements.checklistScreen.classList.toggle("is-active", showChecklist);
+  elements.weatherScreen.classList.toggle("is-active", !showChecklist);
+  elements.checklistTab.classList.toggle("is-active", showChecklist);
+  elements.weatherTab.classList.toggle("is-active", !showChecklist);
+  elements.checklistTab.setAttribute("aria-selected", String(showChecklist));
+  elements.weatherTab.setAttribute("aria-selected", String(!showChecklist));
 }
 
 function formatTime(value) {
@@ -217,6 +247,41 @@ function formatTime(value) {
     hour: "numeric",
     minute: "2-digit"
   }).format(new Date(value));
+}
+
+function formatWeatherCode(code) {
+  const labels = {
+    0: "Clear",
+    1: "Mostly clear",
+    2: "Partly cloudy",
+    3: "Cloudy",
+    45: "Fog",
+    48: "Fog",
+    51: "Light drizzle",
+    53: "Drizzle",
+    55: "Heavy drizzle",
+    56: "Freezing drizzle",
+    57: "Freezing drizzle",
+    61: "Light rain",
+    63: "Rain",
+    65: "Heavy rain",
+    66: "Freezing rain",
+    67: "Freezing rain",
+    71: "Light snow",
+    73: "Snow",
+    75: "Heavy snow",
+    77: "Snow grains",
+    80: "Rain showers",
+    81: "Rain showers",
+    82: "Heavy showers",
+    85: "Snow showers",
+    86: "Heavy snow showers",
+    95: "Thunderstorm",
+    96: "Thunderstorm with hail",
+    99: "Thunderstorm with hail"
+  };
+
+  return labels[code] ?? "Unavailable";
 }
 
 function bestNumber(...values) {
