@@ -1,5 +1,5 @@
 export const APP_CONFIG = {
-  appName: "Morning Wear",
+  appName: "Ready",
   defaultNotificationTime: "06:30",
   pushApiBaseUrl: window.READY_CHECKLIST_API_BASE_URL ?? "",
   weatherApiBaseUrl: "https://api.open-meteo.com/v1/forecast",

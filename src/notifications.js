@@ -1,6 +1,6 @@
 import { APP_CONFIG } from "./config.js";
 
-const APP_ICON_URL = "./icons/app-icon.svg";
+const APP_ICON_URL = "./icons/app-icon-192.png";
 
 export function areNotificationsSupported() {
   return "Notification" in window
@@ -56,7 +56,7 @@ export async function sendTestNotification(reminder) {
   });
 }
 
-export async function subscribeToPushReminders({ routineStartMinutes, timezone, location }) {
+export async function subscribeToPushReminders({ routineStartMinutes, timezone }) {
   if (!areNotificationsSupported()) {
     throw new Error("Push notifications are not supported in this browser.");
   }
@@ -71,8 +71,7 @@ export async function subscribeToPushReminders({ routineStartMinutes, timezone, 
   const response = await postJson("/api/push/subscriptions", {
     subscription: subscription.toJSON(),
     routineStartMinutes,
-    timezone,
-    location
+    timezone
   });
 
   return response.subscription;

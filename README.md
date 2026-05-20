@@ -1,10 +1,10 @@
-# Morning Wear
+# Ready
 
-Morning Wear is a PWA that creates a Ready Checklist from the next 12 hours of weather.
+Ready is a PWA that creates a Ready Checklist from the next 12 hours of weather.
 
-## Stage 7C Deployed Push Reminder Testing
+## Pre-Pilot Polish
 
-This stage prepares the PWA and Express backend for deployment to a real HTTPS URL for personal iPhone testing without Cloudflare Tunnel.
+This stage prepares the PWA and Express backend for personal iPhone testing and a small pre-pilot.
 
 - Push subscriptions survive server restarts.
 - Supabase is used from the backend only.
@@ -38,6 +38,7 @@ SCHEDULER_INTERVAL_MS=30000
 SUPABASE_URL=https://your-project-ref.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your_backend_only_service_role_key
 SUPABASE_PUSH_SUBSCRIPTIONS_TABLE=push_subscriptions
+SUPABASE_PILOT_EVENTS_TABLE=pilot_events
 ```
 
 Do not commit `.env`.
@@ -68,9 +69,29 @@ create table if not exists public.push_subscriptions (
 );
 
 alter table public.push_subscriptions enable row level security;
+
+create table if not exists public.pilot_events (
+  id uuid primary key default gen_random_uuid(),
+  anonymous_device_id text not null,
+  event_type text not null check (
+    event_type in (
+      'app_opened',
+      'checklist_generated',
+      'checklist_completed',
+      'reminders_enabled',
+      'notification_clicked',
+      'weather_screen_viewed',
+      'location_updated'
+    )
+  ),
+  metadata jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now()
+);
+
+alter table public.pilot_events enable row level security;
 ```
 
-No public Row Level Security policies are needed for Stage 7B. The browser does not talk to this table directly; only the Express backend uses the service role key.
+No public Row Level Security policies are needed for these tables. The browser does not talk to Supabase directly; only the Express backend uses the service role key.
 
 4. In Supabase Project Settings, copy the project URL into `SUPABASE_URL`.
 5. Copy the `service_role` key into `SUPABASE_SERVICE_ROLE_KEY`.
@@ -85,7 +106,17 @@ The persisted reminder fields are:
 - last reminder sent date
 - created/updated timestamps
 
-Stage 7B intentionally does not store latitude, longitude, or accuracy.
+Ready intentionally does not persist latitude, longitude, or accuracy to Supabase.
+
+The pilot event fields are:
+
+- `id`
+- anonymous device id
+- event type
+- small metadata JSON
+- created timestamp
+
+Pilot events are anonymous and intentionally minimal. They do not store exact location, names, emails, or user-entered personal information.
 
 ## Deployment Recommendation
 
@@ -140,6 +171,7 @@ VAPID_SUBJECT=mailto:you@example.com
 SUPABASE_URL=https://your-project-ref.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your_backend_only_service_role_key
 SUPABASE_PUSH_SUBSCRIPTIONS_TABLE=push_subscriptions
+SUPABASE_PILOT_EVENTS_TABLE=pilot_events
 SCHEDULER_INTERVAL_MS=30000
 ```
 
@@ -178,6 +210,22 @@ http://localhost:3000
 
 The Express server serves both the PWA and the `/api/push/*` endpoints, so the service worker, push subscription, and API share the same origin during local testing.
 
+## Pre-Pilot Privacy Notes
+
+After first use, Ready stores the last usable latitude and longitude in this browser's `localStorage` so the checklist can load automatically on future opens. This saved location stays on that device and is not persisted to Supabase.
+
+During a pilot, Ready may record basic anonymous activity events in Supabase to understand whether the app is being used. The anonymous device id is stored in localStorage. Event metadata is kept minimal and does not include exact location, names, emails, or personal identifiers.
+
+Tracked pilot events:
+
+- `app_opened`
+- `checklist_generated`
+- `checklist_completed`
+- `reminders_enabled`
+- `notification_clicked`
+- `weather_screen_viewed`
+- `location_updated`
+
 ## Testing Push
 
 1. Open `http://localhost:3000`.
@@ -201,6 +249,15 @@ You can inspect saved subscriptions with:
 ```sh
 curl http://localhost:3000/api/push/subscriptions
 ```
+
+## Saved Location Test
+
+1. Open the app on a device with no saved location.
+2. Tap `Use current location`.
+3. Confirm the checklist appears.
+4. Close and reopen the app.
+5. Confirm the checklist loads automatically from the saved device location.
+6. Tap `Update location` to refresh the saved device location.
 
 ## Server Restart Persistence Test
 
@@ -261,7 +318,7 @@ Localhost testing is useful on desktop browsers. iPhone testing usually needs an
 
 1. Open the deployed `https://your-service-name.onrender.com` URL in iPhone Safari.
 2. Use Safari Share, then Add to Home Screen.
-3. Open Morning Wear from the Home Screen icon.
+3. Open Ready from the Home Screen icon.
 4. Open Settings.
 5. Choose a routine start time.
 6. Tap `Enable reminders`.
@@ -282,9 +339,22 @@ curl -X POST https://your-service-name.onrender.com/api/push/test \
 14. Confirm `last_sent_date` updates in Supabase.
 15. Keep the app/service active through the same minute and confirm no duplicate reminder is sent for the same local date.
 
+## PWA Cache and Icon Troubleshooting
+
+This app uses a service worker cache. When app shell files change, old cached files can sometimes linger on iPhone.
+
+If an old version appears, buttons stop responding, or the Home Screen icon/name does not update:
+
+1. Delete the installed Home Screen app.
+2. In iPhone Settings, clear Safari website data for the deployed site if needed.
+3. Open the deployed URL again in Safari.
+4. Add Ready to the Home Screen again.
+
+Existing installed PWAs may need to be removed and re-added before icon or app name updates appear.
+
 ## Production Notes
 
-Stage 7C adds deployment readiness for personal testing, but Free web hosting is still not reliable enough for a broader pilot reminder system.
+The current app is ready for personal testing and pre-pilot checks, but Free web hosting is still not reliable enough for a broader pilot reminder system.
 
 Before production or a broader pilot, you will also want:
 

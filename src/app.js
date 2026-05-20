@@ -19,17 +19,20 @@ import {
   formatTemp,
   getNextForecastWindow
 } from "./recommendation.js";
+import { trackPilotEvent } from "./pilotAnalytics.js";
 
 const ROUTINE_START_STORAGE_KEY = "morningWearRoutineStartMinutes";
 const LEGACY_WAKE_TIME_STORAGE_KEY = "morningWearWakeTimeMinutes";
 const PUSH_SUBSCRIPTION_ID_STORAGE_KEY = "morningWearPushSubscriptionId";
+const SAVED_LOCATION_STORAGE_KEY = "readySavedLocation";
 const ROUTINE_START_STEP_MINUTES = 30;
 const DEFAULT_ROUTINE_START_MINUTES = 6 * 60;
 
 const state = {
   latestLocation: null,
   pushSubscriptionId: getSavedPushSubscriptionId(),
-  syncedLocation: false
+  completedTrackedForChecklist: false,
+  weatherScreenTracked: false
 };
 
 const elements = {
@@ -75,6 +78,10 @@ window.addEventListener("resize", () => syncActiveScreenFromScroll());
 initializeRoutineStartSetting();
 initializeNotificationSetting();
 registerServiceWorker();
+registerServiceWorkerMessages();
+trackPilotEvent("app_opened", { standalone: isStandalonePwa() });
+trackNotificationClickFromUrl();
+initializeSavedLocationChecklist();
 
 async function handleRecommendationRequest() {
   const requestedAt = new Date();
@@ -84,23 +91,51 @@ async function handleRecommendationRequest() {
   try {
     const location = await getCurrentLocation();
     state.latestLocation = toReminderLocation(location);
-    state.syncedLocation = false;
+    saveLocationForThisDevice(state.latestLocation);
     renderNotificationSetting();
+    trackPilotEvent("location_updated", { source: "current_location" });
     setLoading("Checking weather");
 
     const weather = await fetchTodayWeather(location);
-    renderWindowRecommendation(weather, requestedAt);
+    renderWindowRecommendation(weather, requestedAt, { source: "current_location" });
   } catch (error) {
     renderError(error);
   }
 }
 
-function renderWindowRecommendation(weather, requestedAt = new Date()) {
+async function initializeSavedLocationChecklist() {
+  const savedLocation = getSavedLocationForThisDevice();
+
+  if (!savedLocation) {
+    elements.appStatus.textContent = "Tap Use current location once. Location can be stored on this device for faster starts.";
+    return;
+  }
+
+  state.latestLocation = savedLocation;
+  renderNotificationSetting();
+  setLoading("Checking saved location");
+
+  try {
+    const weather = await fetchTodayWeather(savedLocation);
+    renderWindowRecommendation(weather, new Date(), { source: "saved_location" });
+  } catch (error) {
+    renderError(error);
+    elements.primaryAction.textContent = "Use current location";
+    elements.appStatus.textContent = "Saved location could not update the checklist. Tap Use current location to refresh it.";
+  }
+}
+
+function renderWindowRecommendation(weather, requestedAt = new Date(), options = {}) {
   const forecastWindow = getNextForecastWindow(weather, requestedAt);
   const windowWeather = buildWindowWeather(weather, forecastWindow);
   const recommendation = createRecommendation(windowWeather);
 
   renderRecommendation(weather, recommendation);
+  trackPilotEvent("checklist_generated", {
+    source: options.source ?? "unknown",
+    itemCount: recommendation.items.length,
+    hasItems: recommendation.items.length > 0
+  });
 }
 
 function renderRecommendation(weather, recommendation) {
@@ -110,7 +145,7 @@ function renderRecommendation(weather, recommendation) {
   elements.recommendationTitle.textContent = recommendation.checklistTitle ?? "Ready Checklist:";
   elements.reasonText.textContent = getChecklistPrompt();
   elements.primaryAction.disabled = false;
-  elements.primaryAction.textContent = "Refresh";
+  elements.primaryAction.textContent = "Update location";
 
   renderItems(recommendation.items);
   updateCompletionState();
@@ -137,10 +172,12 @@ function renderFacts(weather) {
   elements.precipFact.textContent = `${currentPrecip.toFixed(2)} in now`;
   elements.conditionFact.textContent = formatWeatherCode(bestNumber(weather.daily.weatherCode, weather.current.weatherCode));
   elements.lastUpdatedFact.textContent = formatTime(weather.fetchedAt);
-  elements.appStatus.textContent = "Checklist updated.";
+  elements.appStatus.textContent = "Checklist updated. Location stays on this device only.";
 }
 
 function renderItems(items) {
+  state.completedTrackedForChecklist = false;
+
   if (items.length === 0) {
     const listItem = document.createElement("li");
     listItem.className = "empty-checklist";
@@ -160,7 +197,7 @@ function setLoading(label) {
   elements.reasonText.textContent = "Checking today's weather.";
   elements.primaryAction.disabled = true;
   elements.primaryAction.textContent = "Checking...";
-  elements.appStatus.textContent = "Location is used only for this forecast.";
+  elements.appStatus.textContent = "Location is stored on this device only.";
   clearItems();
 }
 
@@ -206,6 +243,11 @@ function updateCompletionState() {
   const isComplete = checkboxes.length > 0 && checkboxes.every((checkbox) => checkbox.checked);
 
   elements.appShell.classList.toggle("is-complete", isComplete);
+
+  if (isComplete && !state.completedTrackedForChecklist) {
+    state.completedTrackedForChecklist = true;
+    trackPilotEvent("checklist_completed", { itemCount: checkboxes.length });
+  }
 }
 
 function clearItems() {
@@ -353,13 +395,12 @@ async function syncPushReminderSubscription(statusMessage) {
   try {
     const subscription = await subscribeToPushReminders({
       routineStartMinutes: getSavedRoutineStartTime(),
-      timezone: getBrowserTimezone(),
-      location: state.latestLocation
+      timezone: getBrowserTimezone()
     });
 
     state.pushSubscriptionId = subscription.id;
-    state.syncedLocation = Boolean(state.latestLocation);
     savePushSubscriptionId(subscription.id);
+    trackPilotEvent("reminders_enabled", { permission: getNotificationEnvironment().permission });
     renderNotificationSetting("Server reminders are saved. You can still send a local test notification.");
   } catch (error) {
     renderNotificationSetting(`Permission is granted, but server reminders were not saved. ${error.message}`);
@@ -428,14 +469,8 @@ function getGrantedNotificationStatus() {
 }
 
 function getReminderRoutineNote(routineStartLabel) {
-  if (state.latestLocation && state.syncedLocation) {
-    return getRoutineReminderCopy(routineStartLabel, true);
-  }
-
   if (state.latestLocation) {
-    const action = state.pushSubscriptionId ? "Update reminders" : "Save reminders";
-
-    return `Scheduled reminders will use your ${routineStartLabel} routine start. Tap ${action} to include this session's location for future weather-aware reminders.`;
+    return `${getRoutineReminderCopy(routineStartLabel)} Location stays on this device.`;
   }
 
   return getRoutineReminderCopy(routineStartLabel);
@@ -490,6 +525,62 @@ function savePushSubscriptionId(subscriptionId) {
   }
 }
 
+function getSavedLocationForThisDevice() {
+  try {
+    const rawValue = window.localStorage.getItem(SAVED_LOCATION_STORAGE_KEY);
+
+    if (!rawValue) {
+      return null;
+    }
+
+    const location = JSON.parse(rawValue);
+
+    if (isValidSavedLocation(location)) {
+      return {
+        latitude: Number(location.latitude),
+        longitude: Number(location.longitude),
+        accuracy: Number.isFinite(Number(location.accuracy)) ? Number(location.accuracy) : null,
+        savedAt: location.savedAt ?? null
+      };
+    }
+
+    window.localStorage.removeItem(SAVED_LOCATION_STORAGE_KEY);
+  } catch (error) {
+    return null;
+  }
+
+  return null;
+}
+
+function saveLocationForThisDevice(location) {
+  if (!isValidSavedLocation(location)) {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(SAVED_LOCATION_STORAGE_KEY, JSON.stringify({
+      latitude: Number(location.latitude),
+      longitude: Number(location.longitude),
+      accuracy: Number.isFinite(Number(location.accuracy)) ? Number(location.accuracy) : null,
+      savedAt: new Date().toISOString()
+    }));
+  } catch (error) {
+    elements.appStatus.textContent = "Location could not be saved on this device.";
+  }
+}
+
+function isValidSavedLocation(location) {
+  const latitude = Number(location?.latitude);
+  const longitude = Number(location?.longitude);
+
+  return Number.isFinite(latitude)
+    && Number.isFinite(longitude)
+    && latitude >= -90
+    && latitude <= 90
+    && longitude >= -180
+    && longitude <= 180;
+}
+
 function isValidRoutineStartTime(value) {
   return Number.isInteger(value)
     && value >= 0
@@ -523,6 +614,7 @@ function showScreen(screenName) {
     behavior: "smooth"
   });
   setActiveScreen(screenName);
+  trackWeatherScreenView(screenName);
 }
 
 function syncActiveScreenFromScroll() {
@@ -530,6 +622,7 @@ function syncActiveScreenFromScroll() {
   const activeScreen = elements.screenTrack.scrollLeft > halfway ? "weather" : "checklist";
 
   setActiveScreen(activeScreen);
+  trackWeatherScreenView(activeScreen);
 }
 
 function getScreenLeft(screen) {
@@ -547,6 +640,15 @@ function setActiveScreen(screenName) {
   elements.weatherTab.classList.toggle("is-active", !showChecklist);
   elements.checklistTab.setAttribute("aria-selected", String(showChecklist));
   elements.weatherTab.setAttribute("aria-selected", String(!showChecklist));
+}
+
+function trackWeatherScreenView(screenName) {
+  if (screenName !== "weather" || state.weatherScreenTracked) {
+    return;
+  }
+
+  state.weatherScreenTracked = true;
+  trackPilotEvent("weather_screen_viewed");
 }
 
 function formatTime(value) {
@@ -605,4 +707,33 @@ function registerServiceWorker() {
       elements.appStatus.textContent = `${APP_CONFIG.appName} is running without offline cache.`;
     });
   });
+}
+
+function registerServiceWorkerMessages() {
+  if (!("serviceWorker" in navigator)) {
+    return;
+  }
+
+  navigator.serviceWorker.addEventListener("message", (event) => {
+    if (event.data?.type === "notification_clicked") {
+      trackPilotEvent("notification_clicked");
+    }
+  });
+}
+
+function trackNotificationClickFromUrl() {
+  const url = new URL(window.location.href);
+
+  if (url.searchParams.get("notification") !== "clicked") {
+    return;
+  }
+
+  trackPilotEvent("notification_clicked");
+  url.searchParams.delete("notification");
+  window.history.replaceState({}, "", url);
+}
+
+function isStandalonePwa() {
+  return window.matchMedia("(display-mode: standalone)").matches
+    || window.navigator.standalone === true;
 }

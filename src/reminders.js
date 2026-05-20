@@ -13,10 +13,6 @@ export function createChecklistReminder({ url = "./" } = {}) {
   };
 }
 
-export function getRoutineReminderCopy(routineStartLabel, hasLocation = false) {
-  if (hasLocation) {
-    return `Scheduled reminders will use your ${routineStartLabel} routine start and this session's location.`;
-  }
-
+export function getRoutineReminderCopy(routineStartLabel) {
   return `Scheduled reminders will use your ${routineStartLabel} routine start.`;
 }

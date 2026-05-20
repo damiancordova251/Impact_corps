@@ -18,6 +18,10 @@ import {
   upsertSubscription
 } from "./subscriptionStore.js";
 import {
+  insertPilotEvent,
+  isPilotEventStoreConfigured
+} from "./pilotEventStore.js";
+import {
   isValidRoutineStartMinutes,
   isValidTimezone
 } from "./time.js";
@@ -30,6 +34,15 @@ const port = Number(process.env.PORT) || 3000;
 const host = process.env.HOST || "0.0.0.0";
 const schedulerIntervalMs = Number(process.env.SCHEDULER_INTERVAL_MS) || 30000;
 const pushConfig = configureWebPush();
+const pilotEventTypes = new Set([
+  "app_opened",
+  "checklist_generated",
+  "checklist_completed",
+  "reminders_enabled",
+  "notification_clicked",
+  "weather_screen_viewed",
+  "location_updated"
+]);
 
 app.use(express.json({ limit: "128kb" }));
 
@@ -143,10 +156,32 @@ app.post("/api/push/test", async (req, res) => {
   });
 });
 
+app.post("/api/pilot-events", async (req, res) => {
+  if (!isPilotEventStoreConfigured()) {
+    res.status(202).json({ ok: false });
+    return;
+  }
+
+  const parsed = parsePilotEventPayload(req.body);
+
+  if (!parsed.ok) {
+    res.status(400).json({ error: parsed.error });
+    return;
+  }
+
+  try {
+    await insertPilotEvent(parsed.value);
+    res.status(204).send();
+  } catch (error) {
+    console.error("Pilot event logging failed.", error);
+    res.status(202).json({ ok: false });
+  }
+});
+
 servePwaFiles(app);
 
 app.listen(port, host, () => {
-  console.log(`Morning Wear running at http://${host}:${port}`);
+  console.log(`Ready running at http://${host}:${port}`);
 
   if (!pushConfig.configured) {
     console.log("VAPID keys are missing. Copy .env.example to .env and add generated keys.");
@@ -211,8 +246,7 @@ function parseSubscriptionPayload(body) {
     value: {
       subscription,
       routineStartMinutes,
-      timezone,
-      location: body.location ?? null
+      timezone
     }
   };
 }
@@ -222,6 +256,71 @@ function isValidPushSubscription(subscription) {
     && subscription.endpoint.length > 0
     && typeof subscription.keys?.p256dh === "string"
     && typeof subscription.keys?.auth === "string";
+}
+
+function parsePilotEventPayload(body) {
+  const anonymousDeviceId = body?.anonymousDeviceId;
+  const eventType = body?.eventType;
+
+  if (!isValidAnonymousDeviceId(anonymousDeviceId)) {
+    return {
+      ok: false,
+      error: "A valid anonymous device id is required."
+    };
+  }
+
+  if (!pilotEventTypes.has(eventType)) {
+    return {
+      ok: false,
+      error: "A valid pilot event type is required."
+    };
+  }
+
+  return {
+    ok: true,
+    value: {
+      anonymousDeviceId,
+      eventType,
+      metadata: sanitizePilotEventMetadata(body?.metadata)
+    }
+  };
+}
+
+function isValidAnonymousDeviceId(value) {
+  return typeof value === "string"
+    && value.length >= 8
+    && value.length <= 80
+    && /^[a-zA-Z0-9_-]+$/.test(value);
+}
+
+function sanitizePilotEventMetadata(metadata) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return {};
+  }
+
+  const clean = {};
+
+  if (typeof metadata.source === "string") {
+    clean.source = metadata.source.slice(0, 40);
+  }
+
+  if (Number.isInteger(metadata.itemCount)) {
+    clean.itemCount = Math.max(0, Math.min(metadata.itemCount, 20));
+  }
+
+  if (typeof metadata.hasItems === "boolean") {
+    clean.hasItems = metadata.hasItems;
+  }
+
+  if (typeof metadata.standalone === "boolean") {
+    clean.standalone = metadata.standalone;
+  }
+
+  if (typeof metadata.permission === "string") {
+    clean.permission = metadata.permission.slice(0, 20);
+  }
+
+  return clean;
 }
 
 function sendSubscriptionStoreError(res, error) {

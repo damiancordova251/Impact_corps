@@ -1,14 +1,18 @@
-const CACHE_NAME = "morning-wear-v3";
+const CACHE_NAME = "ready-v1";
 const APP_SHELL = [
   "./",
   "./index.html",
   "./styles.css",
   "./manifest.webmanifest",
   "./icons/app-icon.svg",
+  "./icons/app-icon-180.png",
+  "./icons/app-icon-192.png",
+  "./icons/app-icon-512.png",
   "./src/app.js",
   "./src/config.js",
   "./src/location.js",
   "./src/notifications.js",
+  "./src/pilotAnalytics.js",
   "./src/reminders.js",
   "./src/weather.js",
   "./src/recommendation.js"
@@ -53,8 +57,8 @@ self.addEventListener("push", (event) => {
     self.registration.showNotification(reminder.title, {
       body: reminder.body,
       tag: reminder.tag ?? "ready-checklist",
-      icon: "./icons/app-icon.svg",
-      badge: "./icons/app-icon.svg",
+      icon: "./icons/app-icon-192.png",
+      badge: "./icons/app-icon-192.png",
       data: {
         url: reminder.url ?? "./"
       }
@@ -65,7 +69,7 @@ self.addEventListener("push", (event) => {
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
-  event.waitUntil(openOrFocusApp(event.notification.data?.url));
+  event.waitUntil(openOrFocusAppFromNotification(event.notification.data?.url));
 });
 
 function getPushReminder(event) {
@@ -95,8 +99,8 @@ function getDefaultReminder() {
   };
 }
 
-async function openOrFocusApp(notificationUrl = "./") {
-  const targetUrl = new URL(notificationUrl, self.registration.scope).href;
+async function openOrFocusAppFromNotification(notificationUrl = "./") {
+  const targetUrl = getNotificationClickUrl(notificationUrl);
   const windowClients = await self.clients.matchAll({
     type: "window",
     includeUncontrolled: true
@@ -109,6 +113,7 @@ async function openOrFocusApp(notificationUrl = "./") {
   });
 
   if (matchingClient) {
+    matchingClient.postMessage({ type: "notification_clicked" });
     return matchingClient.focus();
   }
 
@@ -117,4 +122,11 @@ async function openOrFocusApp(notificationUrl = "./") {
   }
 
   return null;
+}
+
+function getNotificationClickUrl(notificationUrl) {
+  const targetUrl = new URL(notificationUrl, self.registration.scope);
+
+  targetUrl.searchParams.set("notification", "clicked");
+  return targetUrl.href;
 }
