@@ -1,6 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
   <title id="title">Ready app icon</title>
   <desc id="desc">A white backpack outline with a teal checkmark on a dark navy app icon background.</desc>
+  <!-- Gradients define the app icon background and teal checklist mark. -->
   <defs>
     <linearGradient id="bg" x1="104" y1="64" x2="408" y2="448" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#14233f"/>
@@ -11,8 +12,10 @@
       <stop offset="1" stop-color="#14b8a6"/>
     </linearGradient>
   </defs>
+  <!-- Rounded-square app tile and subtle border used by the homepage and PWA icons. -->
   <rect width="512" height="512" rx="112" fill="url(#bg)"/>
   <rect x="5" y="5" width="502" height="502" rx="108" fill="none" stroke="#26395d" stroke-width="6" opacity="0.72"/>
+  <!-- White backpack outline represents preparedness across weather conditions. -->
   <g fill="none" stroke="#f8fafc" stroke-linecap="round" stroke-linejoin="round">
     <path d="M218 111c0-33 25-58 56-58s56 25 56 58" stroke-width="22"/>
     <path d="M151 194h-23c-27 0-49 22-49 49v50c0 27 22 49 49 49h23" stroke-width="22"/>
@@ -21,5 +24,6 @@
     <path d="M147 170c10 59 53 97 109 97s99-38 109-97" stroke-width="24"/>
     <rect x="232" y="242" width="48" height="55" rx="8" stroke-width="20"/>
   </g>
+  <!-- Teal checkmark connects the icon to the Ready Checklist action. -->
   <path d="M204 331l39 39 83-88" fill="none" stroke="url(#check)" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

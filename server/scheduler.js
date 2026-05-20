@@ -1,5 +1,7 @@
 import { getLocalTimeParts } from "./time.js";
 
+// Starts a polling loop that checks whether any subscription has reached its
+// local routine start time.
 export function startReminderScheduler({
   getSubscriptions,
   markSent,
@@ -23,6 +25,8 @@ export function startReminderScheduler({
   return setInterval(run, intervalMs);
 }
 
+// For each subscription, compare the current time in that user's timezone
+// against their saved routine start and skip any reminder already sent today.
 export async function checkSubscriptions({
   now,
   getSubscriptions,
@@ -43,6 +47,7 @@ export async function checkSubscriptions({
       return;
     }
 
+    // Expired push endpoints are cleaned up so future scheduler runs stay small.
     try {
       await sendReminder(record);
       await markSent(record.id, localTime.dateKey);

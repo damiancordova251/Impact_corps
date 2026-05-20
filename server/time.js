@@ -1,3 +1,5 @@
+// Converts a Date into local calendar and minute-of-day values for a subscription
+// timezone, which lets the scheduler compare reminder times correctly.
 export function getLocalTimeParts(date, timezone) {
   const parts = new Intl.DateTimeFormat("en-US", {
     timeZone: timezone,
@@ -21,6 +23,8 @@ export function getLocalTimeParts(date, timezone) {
   };
 }
 
+// Validates IANA timezone names by asking Intl.DateTimeFormat to format with
+// them; invalid names throw and are rejected.
 export function isValidTimezone(timezone) {
   if (typeof timezone !== "string" || timezone.trim().length === 0) {
     return false;
@@ -34,6 +38,8 @@ export function isValidTimezone(timezone) {
   }
 }
 
+// Routine reminders are stored as minutes after midnight and limited to
+// 30-minute steps to match the frontend slider.
 export function isValidRoutineStartMinutes(value) {
   return Number.isInteger(value)
     && value >= 0

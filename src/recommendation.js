@@ -1,3 +1,5 @@
+// Weather code groups and thresholds define the checklist rules. Keeping them
+// here makes it easier to tune recommendations without hunting through UI code.
 const RAIN_CODES = new Set([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99]);
 const SNOW_CODES = new Set([71, 73, 75, 77, 85, 86]);
 const SUNNY_CODES = new Set([0, 1, 2]);
@@ -17,6 +19,8 @@ const WINDY_MPH = 24;
 const COLD_WIND_MPH = 18;
 const HOT_TEMP = 86;
 
+// Selects the forecast hours that match how long the user expects to be away
+// from home, falling back to the nearest hour when no hourly data is available.
 export function getNextForecastWindow(weather, now = new Date(), durationHours = DEFAULT_FORECAST_WINDOW_HOURS) {
   const hourly = Array.isArray(weather.hourly) ? weather.hourly : [];
   const normalizedDurationHours = normalizeForecastWindowHours(durationHours);
@@ -40,6 +44,8 @@ export function getNextForecastWindow(weather, now = new Date(), durationHours =
   };
 }
 
+// Summarizes the selected hourly window into a weather object shaped like the
+// original forecast, so the recommendation rules can stay simple.
 export function buildWindowWeather(weather, forecastWindow) {
   const windowHours = forecastWindow.usableHours ?? [];
   const representative = forecastWindow.representativeHour ?? weather.current ?? {};
@@ -79,6 +85,8 @@ export function buildWindowWeather(weather, forecastWindow) {
   };
 }
 
+// Converts summarized weather conditions into checklist items, keeping each
+// item scored so the most important recommendations appear first.
 export function createRecommendation(windowWeather) {
   const durationHours = windowWeather.checklistWindow?.durationHours ?? DEFAULT_FORECAST_WINDOW_HOURS;
   const feelsLike = bestNumber(windowWeather.current.feelsLike, windowWeather.current.temperature, windowWeather.daily.high);
@@ -193,6 +201,8 @@ export function createRecommendation(windowWeather) {
   };
 }
 
+// Sun protection is deliberately tied to daylight and sunny hours inside the
+// selected checklist window, not the full day.
 function shouldRecommendSunProtection(weather, conditions) {
   const daylightHours = getDaylightHours(weather.checklistWindow?.usableHours ?? []);
   const daylightWarmEnough = daylightHours.some((hour) => {
@@ -210,6 +220,8 @@ function shouldRecommendSunProtection(weather, conditions) {
     && !conditions.snowRisk;
 }
 
+// Daylight helpers support the sunglasses/hat rule without depending on a
+// separate sunrise API.
 export function hasDaylightHours(hours) {
   return getDaylightHours(Array.isArray(hours) ? hours : []).length > 0;
 }
@@ -222,6 +234,8 @@ function getDaylightHours(hours) {
   });
 }
 
+// Window and aggregation helpers turn a list of hourly objects into max/min
+// values for rain, wind, temperature, and condition codes.
 function isWithinWindow(hour, start, end) {
   const hourTime = parseForecastTime(hour.time);
 
@@ -261,6 +275,8 @@ function minFromHours(hours, key, fallback) {
   return Math.min(...values);
 }
 
+// Chooses the most important weather code in a window, preferring snow and rain
+// over calmer conditions because those affect checklist items more.
 function getWindowWeatherCode(hours, fallback) {
   const codes = hours.map((hour) => hour.weatherCode).filter((code) => Number.isFinite(code));
 
@@ -282,6 +298,8 @@ function hasCode(codeSet, ...codes) {
   return codes.some((code) => codeSet.has(Number(code)));
 }
 
+// Action helpers handle priority, duplicate removal, and clothing layer
+// conflicts after all weather rules have had a chance to add suggestions.
 function addAction(actions, item, label, priority) {
   actions.push({ item, label, priority });
 }
@@ -320,6 +338,7 @@ function removeLayerConflicts(actions) {
   });
 }
 
+// Copy helpers keep the checklist title, reason, and rain explanation concise.
 function combineActionLabels(actions) {
   if (actions.length === 1) {
     return actions[0].label;
@@ -358,6 +377,7 @@ function normalizeForecastWindowHours(value) {
     : DEFAULT_FORECAST_WINDOW_HOURS;
 }
 
+// Shared temperature formatter for both recommendation copy and weather details.
 export function formatTemp(value) {
   return `${Math.round(value)}\u00b0F`;
 }

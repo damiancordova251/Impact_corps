@@ -1,5 +1,7 @@
 import { APP_CONFIG } from "./config.js";
 
+// Pilot analytics intentionally stays anonymous and small: one local device id,
+// a limited event allowlist, and minimal non-sensitive metadata.
 const DEVICE_ID_STORAGE_KEY = "readyPilotAnonymousDeviceId";
 const ALLOWED_EVENT_TYPES = new Set([
   "app_opened",
@@ -11,6 +13,8 @@ const ALLOWED_EVENT_TYPES = new Set([
   "location_updated"
 ]);
 
+// Sends fire-and-forget activity events so analytics failures never block the
+// checklist or notification flows.
 export function trackPilotEvent(eventType, metadata = {}) {
   if (!ALLOWED_EVENT_TYPES.has(eventType)) {
     return;
@@ -46,6 +50,8 @@ export function trackPilotEvent(eventType, metadata = {}) {
   }).catch(() => {});
 }
 
+// Stores a random anonymous id on this browser only; no account, email, or exact
+// location is involved.
 function getAnonymousDeviceId() {
   try {
     const existingId = window.localStorage.getItem(DEVICE_ID_STORAGE_KEY);
@@ -63,6 +69,8 @@ function getAnonymousDeviceId() {
   }
 }
 
+// Only passes known, bounded metadata fields to the backend so accidental
+// personal details or large payloads are not recorded.
 function sanitizeMetadata(metadata) {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
     return {};
@@ -97,10 +105,12 @@ function sanitizeMetadata(metadata) {
   return clean;
 }
 
+// Used only when crypto.randomUUID is unavailable.
 function createFallbackId() {
   return `ready-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
 }
 
+// Keeps analytics endpoint construction aligned with the notification API base.
 function apiUrl(path) {
   const baseUrl = APP_CONFIG.pushApiBaseUrl || window.location.origin;
 

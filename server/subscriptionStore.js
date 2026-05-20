@@ -1,14 +1,20 @@
 import crypto from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 
+// Supabase-backed subscription storage replaces the old in-memory store so push
+// reminders survive server restarts.
 const DEFAULT_TABLE_NAME = "push_subscriptions";
 
 let supabaseClient = null;
 
+// The server treats storage as unavailable until both backend-only Supabase
+// credentials are present.
 export function isSubscriptionStoreConfigured() {
   return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
 }
 
+// Creates or updates the row for one browser push endpoint while preserving the
+// last sent date used for duplicate-reminder prevention.
 export async function upsertSubscription(input) {
   const subscription = input.subscription;
   const id = createSubscriptionId(subscription.endpoint);
@@ -35,6 +41,8 @@ export async function upsertSubscription(input) {
   return toRecord(data);
 }
 
+// Read helpers expose one subscription or the full pilot list to API routes and
+// the scheduler.
 export async function getSubscription(id) {
   const { data, error } = await getClient()
     .from(getTableName())
@@ -58,6 +66,8 @@ export async function getAllSubscriptions() {
   return data.map(toRecord);
 }
 
+// Scheduler write helpers update reminder state or remove expired browser
+// subscriptions.
 export async function markReminderSent(id, localDate) {
   const { error } = await getClient()
     .from(getTableName())
@@ -79,6 +89,8 @@ export async function removeSubscription(id) {
   assertNoStoreError(error);
 }
 
+// Public summaries intentionally omit the raw push subscription JSON and any
+// exact location data.
 export function toPublicSubscription(record) {
   return {
     id: record.id,
@@ -91,6 +103,8 @@ export function toPublicSubscription(record) {
   };
 }
 
+// Lazily creates one Supabase client with service-role credentials on the
+// backend only; frontend JavaScript never imports this file.
 function getClient() {
   if (supabaseClient) {
     return supabaseClient;
@@ -115,6 +129,8 @@ function getClient() {
   return supabaseClient;
 }
 
+// Small mapping helpers keep database snake_case rows separate from the
+// camelCase records used by server code.
 function getTableName() {
   return process.env.SUPABASE_PUSH_SUBSCRIPTIONS_TABLE || DEFAULT_TABLE_NAME;
 }
@@ -139,6 +155,7 @@ function toRecord(row) {
   };
 }
 
+// Converts Supabase SDK errors into a named store error for route-level handling.
 function assertNoStoreError(error) {
   if (error) {
     throw new SubscriptionStoreError(error.message);

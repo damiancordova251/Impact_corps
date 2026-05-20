@@ -1,3 +1,4 @@
+/* Design tokens shared by the whole PWA. */
 :root {
   color-scheme: light;
   --bg: #f5f7fb;
@@ -13,6 +14,7 @@
   --shadow: 0 18px 50px rgba(15, 23, 42, 0.12);
 }
 
+/* Global sizing and base typography. */
 * {
   box-sizing: border-box;
 }
@@ -29,6 +31,7 @@ button {
   font: inherit;
 }
 
+/* Main phone-sized shell that centers on desktop and fills the mobile viewport. */
 .app-shell {
   width: min(100%, 480px);
   min-height: 100svh;
@@ -40,6 +43,7 @@ button {
   gap: 16px;
 }
 
+/* Header and screen tabs provide app state plus navigation between views. */
 .top-bar {
   display: flex;
   align-items: center;
@@ -99,6 +103,8 @@ button {
   color: #ffffff;
 }
 
+/* Horizontal screen track keeps Checklist and Weather as swipeable full-width
+views while hiding the native scrollbar. */
 .screen-track {
   width: 100%;
   margin: 0;
@@ -125,6 +131,7 @@ button {
   scroll-snap-align: start;
 }
 
+/* Checklist card layout, app icon, heading, completion mark, and helper copy. */
 .recommendation-panel {
   position: relative;
   border: 1px solid var(--line);
@@ -203,6 +210,8 @@ button {
   text-align: left;
 }
 
+/* Checklist rows use real checkboxes for accessibility while styling a custom
+checkmark box beside each item. */
 .item-list {
   display: flex;
   flex-direction: column;
@@ -288,6 +297,8 @@ button {
   text-align: left;
 }
 
+/* Checklist-specific alignment keeps the card content left-aligned inside the
+centered screen. */
 #checklistScreen {
   display: block;
   text-align: left;
@@ -312,6 +323,7 @@ button {
   text-align: left;
 }
 
+/* Primary location action and Settings controls. */
 .primary-action {
   width: 100%;
   min-height: 54px;
@@ -378,6 +390,7 @@ button {
   accent-color: var(--accent);
 }
 
+/* Notification settings explain reminder status and expose enable/test actions. */
 .notification-setting {
   border-top: 1px solid var(--line);
   padding: 14px;
@@ -426,6 +439,7 @@ button {
   transform: translateY(1px);
 }
 
+/* Weather details screen presents the current temperature and forecast facts. */
 .weather-screen {
   border: 1px solid var(--line);
   border-radius: 8px;
@@ -501,6 +515,7 @@ button {
   border-bottom: 1px solid var(--line);
 }
 
+/* Footer and state styling for error or warning conditions. */
 .footer-note {
   margin-top: auto;
   padding: 0 2px;
@@ -524,6 +539,8 @@ button {
   color: var(--warning);
 }
 
+/* Lightweight refresh prompt appears when the service worker has installed an
+updated app version. */
 .update-banner {
   position: fixed;
   right: max(16px, env(safe-area-inset-right));
@@ -562,6 +579,7 @@ button {
   cursor: pointer;
 }
 
+/* Desktop viewport treatment keeps the mobile app form factor centered. */
 @media (min-width: 720px) {
   body {
     display: grid;

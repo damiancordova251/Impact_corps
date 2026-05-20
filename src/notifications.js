@@ -2,6 +2,8 @@ import { APP_CONFIG } from "./config.js";
 
 const APP_ICON_URL = "./icons/app-icon-192.png";
 
+// Capability checks are kept together because iOS, installed PWAs, and desktop
+// browsers expose slightly different pieces of the notification APIs.
 export function areNotificationsSupported() {
   return "Notification" in window
     && "serviceWorker" in navigator
@@ -25,6 +27,8 @@ export function getNotificationEnvironment() {
   };
 }
 
+// Permission and local test notification helpers power the Settings controls
+// without touching the backend subscription store.
 export async function requestNotificationPermission() {
   if (!areNotificationsSupported()) {
     return "unsupported";
@@ -56,6 +60,8 @@ export async function sendTestNotification(reminder) {
   });
 }
 
+// Creates or reuses the browser PushSubscription, then saves the subscription
+// details to the Express backend for scheduled Web Push reminders.
 export async function subscribeToPushReminders({ routineStartMinutes, timezone }) {
   if (!areNotificationsSupported()) {
     throw new Error("Push notifications are not supported in this browser.");
@@ -77,6 +83,8 @@ export async function subscribeToPushReminders({ routineStartMinutes, timezone }
   return response.subscription;
 }
 
+// Backend helpers wrap small JSON API calls and keep URL construction compatible
+// with both local development and hosted deployments.
 export async function sendServerTestNotification(subscriptionId) {
   const response = await postJson("/api/push/test", { subscriptionId });
 
@@ -134,12 +142,16 @@ async function postJson(path, payload) {
   return data;
 }
 
+// Resolves relative API paths against either an override base URL or the current
+// app origin.
 function apiUrl(path) {
   const baseUrl = APP_CONFIG.pushApiBaseUrl || window.location.origin;
 
   return new URL(path, baseUrl).toString();
 }
 
+// Browser Push expects the VAPID key as bytes, while the backend exposes it as
+// URL-safe base64 text.
 function urlBase64ToUint8Array(base64String) {
   const padding = "=".repeat((4 - base64String.length % 4) % 4);
   const base64 = `${base64String}${padding}`
@@ -155,6 +167,8 @@ function urlBase64ToUint8Array(base64String) {
   return outputArray;
 }
 
+// iPhone notification support depends on the app being opened from the Home
+// Screen, so these helpers guide the Settings copy.
 function isLikelyIos() {
   return /iPad|iPhone|iPod/.test(navigator.userAgent)
     || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);

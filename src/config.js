@@ -1,3 +1,5 @@
+// Shared frontend settings keep app-wide names, API endpoints, and browser
+// permission options in one place so feature modules do not duplicate them.
 export const APP_CONFIG = {
   appName: "Ready",
   defaultNotificationTime: "06:30",

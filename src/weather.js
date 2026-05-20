@@ -1,5 +1,7 @@
 import { APP_CONFIG } from "./config.js";
 
+// A named error type keeps forecast failures separate from location or app
+// rendering errors.
 export class WeatherFetchError extends Error {
   constructor(message) {
     super(message);
@@ -7,6 +9,8 @@ export class WeatherFetchError extends Error {
   }
 }
 
+// Builds the Open-Meteo request for current, daily, and hourly values that the
+// checklist and weather detail screen need.
 export async function fetchTodayWeather({ latitude, longitude }) {
   const url = new URL(APP_CONFIG.weatherApiBaseUrl);
   url.search = new URLSearchParams({
@@ -63,6 +67,8 @@ export async function fetchTodayWeather({ latitude, longitude }) {
   return normalizeWeather(data);
 }
 
+// Converts the Open-Meteo response shape into the smaller weather object used
+// by the recommendation and UI layers.
 function normalizeWeather(data) {
   const current = data.current ?? {};
   const daily = data.daily ?? {};
@@ -102,6 +108,8 @@ function normalizeWeather(data) {
   return weather;
 }
 
+// Rebuilds the hourly arrays into one object per forecast hour so later code can
+// filter and summarize the selected checklist window.
 function normalizeHourly(hourly) {
   const times = Array.isArray(hourly.time) ? hourly.time : [];
 
@@ -119,6 +127,8 @@ function normalizeHourly(hourly) {
   }));
 }
 
+// Small guards below keep missing API fields from leaking undefined values into
+// recommendation math or display formatting.
 function valueAt(values, index) {
   return Array.isArray(values) ? values[index] : null;
 }

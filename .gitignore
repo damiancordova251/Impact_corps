@@ -1,5 +1,8 @@
+# Local environment files can contain Supabase service keys and VAPID secrets.
 .env.local
 .env.*.local
 
 .env
+
+# Installed dependencies are restored from package-lock.json.
 node_modules/

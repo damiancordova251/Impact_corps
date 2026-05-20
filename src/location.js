@@ -1,5 +1,7 @@
 import { APP_CONFIG } from "./config.js";
 
+// Custom error codes let the UI show specific, helpful copy for permission,
+// browser support, timeout, and HTTPS problems.
 export class LocationAccessError extends Error {
   constructor(code, message) {
     super(message);
@@ -8,6 +10,8 @@ export class LocationAccessError extends Error {
   }
 }
 
+// Requests the device's current position after confirming the browser context
+// is allowed to use geolocation.
 export function getCurrentLocation() {
   if (!window.isSecureContext) {
     throw new LocationAccessError(
@@ -40,6 +44,8 @@ export function getCurrentLocation() {
   });
 }
 
+// Converts browser geolocation errors into the app's smaller set of user-facing
+// states so the main app code does not need to know raw browser error numbers.
 function toLocationAccessError(error) {
   if (error.code === error.PERMISSION_DENIED) {
     return new LocationAccessError(

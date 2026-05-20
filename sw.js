@@ -1,5 +1,10 @@
+// Bump APP_VERSION whenever cached app shell or icon assets need to be refreshed
+// for installed PWAs.
 const APP_VERSION = "prepilot-2026-05-20-icon-bg-cleanup";
 const CACHE_NAME = `ready-${APP_VERSION}`;
+
+// Core assets use network-first caching so pilot deployments are less likely to
+// get stuck on stale HTML, JS, or CSS.
 const CORE_ASSETS = [
   "./",
   "./index.html",
@@ -14,6 +19,9 @@ const CORE_ASSETS = [
   "./src/weather.js",
   "./src/recommendation.js"
 ];
+
+// Icon assets can safely use cache-first behavior because they are versioned by
+// the service worker cache name and change less often than app code.
 const ICON_ASSETS = [
   "./icons/app-icon.svg",
   "./icons/app-icon-180.png",
@@ -22,6 +30,8 @@ const ICON_ASSETS = [
 ];
 const ICON_PATHS = new Set(ICON_ASSETS.map(toAssetPath));
 
+// During install, pre-cache the app shell and ask the browser to activate this
+// worker without waiting for old tabs to close.
 self.addEventListener("install", (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => cache.addAll([
@@ -32,6 +42,8 @@ self.addEventListener("install", (event) => {
   self.skipWaiting();
 });
 
+// Activation removes all older Ready caches and lets this worker control open
+// clients so refreshes use the newest cached assets.
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches
@@ -47,6 +59,8 @@ self.addEventListener("activate", (event) => {
   );
 });
 
+// Fetch handling skips API and cross-origin requests, uses network-first for app
+// pages/code, and keeps icons cache-first.
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") {
     return;
@@ -71,6 +85,8 @@ self.addEventListener("fetch", (event) => {
   event.respondWith(networkFirst(event.request));
 });
 
+// Push events display the reminder payload from the backend, with safe default
+// copy if the payload is missing or malformed.
 self.addEventListener("push", (event) => {
   const reminder = getPushReminder(event);
 
@@ -87,12 +103,16 @@ self.addEventListener("push", (event) => {
   );
 });
 
+// Notification clicks focus an existing app window when possible, otherwise they
+// open a new app window and mark the launch as notification-driven.
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
   event.waitUntil(openOrFocusAppFromNotification(event.notification.data?.url));
 });
 
+// Network-first caching gives fresh deployments priority while preserving a
+// cached fallback for offline or flaky network moments.
 async function networkFirst(request, fallbackUrl = null) {
   const cache = await caches.open(CACHE_NAME);
 
@@ -119,6 +139,8 @@ async function networkFirst(request, fallbackUrl = null) {
   }
 }
 
+// Cache-first is reserved for stable icon files so they load quickly after
+// install without risking stale app behavior.
 async function cacheFirst(request) {
   const cached = await caches.match(request);
 
@@ -136,6 +158,7 @@ async function cacheFirst(request) {
   return response;
 }
 
+// Parses backend push data and falls back to default reminder copy.
 function getPushReminder(event) {
   if (!event.data) {
     return getDefaultReminder();
@@ -163,6 +186,7 @@ function getDefaultReminder() {
   };
 }
 
+// Focuses an existing Ready window, or opens one if no app window is available.
 async function openOrFocusAppFromNotification(notificationUrl = "./") {
   const targetUrl = getNotificationClickUrl(notificationUrl);
   const windowClients = await self.clients.matchAll({
@@ -188,6 +212,7 @@ async function openOrFocusAppFromNotification(notificationUrl = "./") {
   return null;
 }
 
+// Adds a URL marker so the frontend can track notification opens anonymously.
 function getNotificationClickUrl(notificationUrl) {
   const targetUrl = new URL(notificationUrl, self.registration.scope);
 
@@ -195,6 +220,7 @@ function getNotificationClickUrl(notificationUrl) {
   return targetUrl.href;
 }
 
+// Normalizes relative asset paths into pathnames for fetch-route matching.
 function toAssetPath(asset) {
   return new URL(asset, self.registration.scope).pathname;
 }

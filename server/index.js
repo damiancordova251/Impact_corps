@@ -1,3 +1,5 @@
+// Express server entry point: serves the PWA, exposes push/analytics APIs, and
+// starts the reminder scheduler when required backend configuration exists.
 import "dotenv/config";
 import express from "express";
 import path from "node:path";
@@ -26,6 +28,8 @@ import {
   isValidTimezone
 } from "./time.js";
 
+// File paths and hosting settings support both local development and Render's
+// platform-provided PORT/HOST behavior.
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const projectRoot = path.resolve(__dirname, "..");
@@ -34,6 +38,9 @@ const port = Number(process.env.PORT) || 3000;
 const host = process.env.HOST || "0.0.0.0";
 const schedulerIntervalMs = Number(process.env.SCHEDULER_INTERVAL_MS) || 30000;
 const pushConfig = configureWebPush();
+
+// Only these anonymous event names are accepted from the frontend pilot
+// analytics endpoint.
 const pilotEventTypes = new Set([
   "app_opened",
   "checklist_generated",
@@ -46,6 +53,8 @@ const pilotEventTypes = new Set([
 
 app.use(express.json({ limit: "128kb" }));
 
+// Health check reports whether push keys and persistent subscription storage are
+// configured, which is useful during local and hosted deployment testing.
 app.get("/api/health", async (req, res) => {
   const storeConfigured = isSubscriptionStoreConfigured();
 
@@ -69,6 +78,7 @@ app.get("/api/health", async (req, res) => {
   }
 });
 
+// Exposes the public VAPID key so the browser can create a PushSubscription.
 app.get("/api/push/public-key", (req, res) => {
   if (!pushConfig.configured) {
     res.status(503).json({
@@ -82,6 +92,7 @@ app.get("/api/push/public-key", (req, res) => {
   });
 });
 
+// Saves or updates a browser push subscription with its reminder schedule.
 app.post("/api/push/subscriptions", async (req, res) => {
   if (!pushConfig.configured) {
     res.status(503).json({
@@ -108,6 +119,8 @@ app.post("/api/push/subscriptions", async (req, res) => {
   }
 });
 
+// Lists public subscription summaries for manual pilot debugging; it never
+// exposes the full push subscription JSON.
 app.get("/api/push/subscriptions", async (req, res) => {
   try {
     const subscriptions = await getAllSubscriptions();
@@ -121,6 +134,8 @@ app.get("/api/push/subscriptions", async (req, res) => {
   }
 });
 
+// Sends an immediate backend push to one subscription or all subscriptions for
+// end-to-end notification testing.
 app.post("/api/push/test", async (req, res) => {
   if (!pushConfig.configured) {
     res.status(503).json({
@@ -156,6 +171,8 @@ app.post("/api/push/test", async (req, res) => {
   });
 });
 
+// Accepts anonymous pilot activity events. Logging failures are intentionally
+// soft so analytics never break the app experience.
 app.post("/api/pilot-events", async (req, res) => {
   if (!isPilotEventStoreConfigured()) {
     res.status(202).json({ ok: false });
@@ -180,6 +197,8 @@ app.post("/api/pilot-events", async (req, res) => {
 
 servePwaFiles(app);
 
+// Starts the web server first, then starts scheduled reminders only when VAPID
+// keys and Supabase subscription storage are configured.
 app.listen(port, host, () => {
   console.log(`Ready running at http://${host}:${port}`);
 
@@ -203,6 +222,8 @@ app.listen(port, host, () => {
   console.log(`Reminder scheduler running every ${schedulerIntervalMs}ms.`);
 });
 
+// Wraps push delivery so expired subscriptions can be identified and removed by
+// the scheduler.
 async function sendReminder(record) {
   try {
     await sendReadyChecklistPush(record);
@@ -215,6 +236,7 @@ async function sendReminder(record) {
   }
 }
 
+// Validates the subscription payload before it reaches Supabase or Web Push.
 function parseSubscriptionPayload(body) {
   const subscription = body?.subscription;
   const routineStartMinutes = Number(body?.routineStartMinutes);
@@ -258,6 +280,7 @@ function isValidPushSubscription(subscription) {
     && typeof subscription.keys?.auth === "string";
 }
 
+// Validates and sanitizes anonymous pilot events before inserting them.
 function parsePilotEventPayload(body) {
   const anonymousDeviceId = body?.anonymousDeviceId;
   const eventType = body?.eventType;
@@ -327,6 +350,7 @@ function sanitizePilotEventMetadata(metadata) {
   return clean;
 }
 
+// Keeps subscription storage errors consistent across endpoints.
 function sendSubscriptionStoreError(res, error) {
   console.error("Subscription storage request failed.", error);
   res.status(503).json({
@@ -334,6 +358,7 @@ function sendSubscriptionStoreError(res, error) {
   });
 }
 
+// Serves the static PWA files from the same Express app as the API.
 function servePwaFiles(appInstance) {
   appInstance.use("/icons", express.static(path.join(projectRoot, "icons")));
   appInstance.use("/src", express.static(path.join(projectRoot, "src")));

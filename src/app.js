@@ -1,3 +1,5 @@
+// Main browser entry point: wires together location, weather, checklist rules,
+// reminders, service worker updates, and anonymous pilot analytics.
 import { APP_CONFIG } from "./config.js";
 import { getCurrentLocation, LocationAccessError } from "./location.js";
 import {
@@ -21,6 +23,8 @@ import {
 } from "./recommendation.js";
 import { trackPilotEvent } from "./pilotAnalytics.js";
 
+// localStorage keys keep user preferences on this device without adding
+// accounts or storing exact location in Supabase.
 const ROUTINE_START_STORAGE_KEY = "morningWearRoutineStartMinutes";
 const LEGACY_WAKE_TIME_STORAGE_KEY = "morningWearWakeTimeMinutes";
 const PUSH_SUBSCRIPTION_ID_STORAGE_KEY = "morningWearPushSubscriptionId";
@@ -31,6 +35,8 @@ const DEFAULT_ROUTINE_START_MINUTES = 6 * 60;
 const DEFAULT_TIME_AWAY_HOURS = 12;
 const TIME_AWAY_OPTIONS = [3, 6, 9, 12, 15];
 
+// Runtime state stores the current forecast/session values that multiple UI
+// handlers need to coordinate.
 const state = {
   latestWeather: null,
   latestLocation: null,
@@ -39,6 +45,8 @@ const state = {
   weatherScreenTracked: false
 };
 
+// DOM references are collected once so rendering functions can update the page
+// without repeatedly querying the document.
 const elements = {
   appShell: document.querySelector(".app-shell"),
   statusPill: document.querySelector("#statusPill"),
@@ -73,6 +81,8 @@ const elements = {
   appStatus: document.querySelector("#appStatus")
 };
 
+// Event listeners turn user actions, scrolling, and setting changes into app
+// state updates.
 elements.primaryAction.addEventListener("click", handleRecommendationRequest);
 elements.itemList.addEventListener("change", updateCompletionState);
 elements.checklistTab.addEventListener("click", () => showScreen("checklist"));
@@ -88,6 +98,9 @@ elements.updateRefreshButton?.addEventListener("click", () => {
   window.location.reload();
 });
 window.addEventListener("resize", () => syncActiveScreenFromScroll());
+
+// Startup initializes saved settings, notification copy, service worker wiring,
+// analytics, and the saved-location auto-checklist.
 initializeTimeAwaySetting();
 initializeRoutineStartSetting();
 initializeNotificationSetting();
@@ -97,6 +110,8 @@ trackPilotEvent("app_opened", { standalone: isStandalonePwa() });
 trackNotificationClickFromUrl();
 initializeSavedLocationChecklist();
 
+// Handles the explicit "Use current location" / "Update location" button flow:
+// get GPS, save it locally, fetch weather, then render the checklist.
 async function handleRecommendationRequest() {
   const requestedAt = new Date();
 
@@ -117,6 +132,8 @@ async function handleRecommendationRequest() {
   }
 }
 
+// On later app opens, reuses the locally saved location so the checklist can
+// generate without asking the user to tap the location button again.
 async function initializeSavedLocationChecklist() {
   const savedLocation = getSavedLocationForThisDevice();
 
@@ -139,6 +156,8 @@ async function initializeSavedLocationChecklist() {
   }
 }
 
+// Applies the selected time-away setting to the forecast before running the
+// recommendation engine.
 function renderWindowRecommendation(weather, requestedAt = new Date(), options = {}) {
   const timeAwayHours = getSavedTimeAwayHours();
   const forecastWindow = getNextForecastWindow(weather, requestedAt, timeAwayHours);
@@ -155,6 +174,7 @@ function renderWindowRecommendation(weather, requestedAt = new Date(), options =
   });
 }
 
+// Updates the main checklist screen after a successful weather fetch.
 function renderRecommendation(weather, recommendation, timeAwayHours) {
   elements.appShell.classList.remove("is-error", "is-warning", "is-complete");
   elements.statusPill.textContent = "Updated";
@@ -169,6 +189,7 @@ function renderRecommendation(weather, recommendation, timeAwayHours) {
   renderFacts(weather);
 }
 
+// Populates the Weather screen with the current forecast summary.
 function renderFacts(weather) {
   const currentTemp = bestNumber(weather.current.temperature, weather.daily.high);
   const feelsLike = bestNumber(weather.current.feelsLike, weather.current.temperature);
@@ -192,6 +213,7 @@ function renderFacts(weather) {
   elements.appStatus.textContent = "Checklist updated. Location stays on this device only.";
 }
 
+// Rebuilds the checklist rows from the recommendation output.
 function renderItems(items) {
   state.completedTrackedForChecklist = false;
 
@@ -206,6 +228,8 @@ function renderItems(items) {
   elements.itemList.replaceChildren(...items.map(createChecklistItem));
 }
 
+// Loading and error renderers keep the main screen in a clear state while async
+// location/weather/reminder work is running or has failed.
 function setLoading(label) {
   elements.appShell.classList.remove("is-error", "is-warning", "is-complete");
   elements.statusPill.textContent = "Loading";
@@ -235,6 +259,8 @@ function renderError(error) {
   resetFacts();
 }
 
+// Builds one accessible checklist row with a hidden checkbox and styled check
+// mark.
 function createChecklistItem(item) {
   const listItem = document.createElement("li");
   const label = document.createElement("label");
@@ -255,6 +281,8 @@ function createChecklistItem(item) {
   return listItem;
 }
 
+// Marks the screen complete when every item is checked and records that pilot
+// event only once per generated checklist.
 function updateCompletionState() {
   const checkboxes = [...elements.itemList.querySelectorAll("input[type='checkbox']")];
   const isComplete = checkboxes.length > 0 && checkboxes.every((checkbox) => checkbox.checked);
@@ -267,6 +295,7 @@ function updateCompletionState() {
   }
 }
 
+// Small text and reset helpers keep checklist display copy consistent.
 function clearItems() {
   elements.itemList.replaceChildren();
   updateCompletionState();
@@ -276,6 +305,7 @@ function getChecklistPrompt(timeAwayHours = getSavedTimeAwayHours()) {
   return `Prepared for the next ${timeAwayHours} hours.`;
 }
 
+// Maps known error types to concise UI states and recovery guidance.
 function getErrorCopy(error) {
   if (error instanceof LocationAccessError) {
     if (error.code === "DENIED") {
@@ -342,6 +372,8 @@ function resetFacts() {
   elements.lastUpdatedFact.textContent = "--";
 }
 
+// Time-away settings control the recommendation forecast window and stay
+// separate from the reminder schedule.
 function initializeTimeAwaySetting() {
   const timeAwayHours = getSavedTimeAwayHours();
 
@@ -367,6 +399,8 @@ function handleTimeAwayCommit() {
   renderWindowRecommendation(state.latestWeather, new Date(), { source: "time_away_updated" });
 }
 
+// Routine start settings control when reminders are sent, not how much forecast
+// data the checklist uses.
 function initializeRoutineStartSetting() {
   const routineStartTime = getSavedRoutineStartTime();
 
@@ -393,6 +427,8 @@ async function handleRoutineStartCommit() {
   await syncPushReminderSubscription("Routine start updated. Saving reminder schedule...");
 }
 
+// Notification settings manage browser permission, local test notifications,
+// and saving Web Push subscriptions to the backend.
 function initializeNotificationSetting() {
   renderNotificationSetting();
 }
@@ -431,6 +467,8 @@ async function handleTestNotification() {
   }
 }
 
+// Syncs the current browser PushSubscription with the server so scheduled
+// reminders can survive restarts through Supabase storage.
 async function syncPushReminderSubscription(statusMessage) {
   renderNotificationSetting(statusMessage);
 
@@ -449,6 +487,8 @@ async function syncPushReminderSubscription(statusMessage) {
   }
 }
 
+// Recomputes Settings text and button availability from current browser
+// notification support, permission, and saved subscription state.
 function renderNotificationSetting(statusOverride = null) {
   const environment = getNotificationEnvironment();
   const routineStartLabel = formatTimeLabel(getSavedRoutineStartTime());
@@ -518,6 +558,8 @@ function getReminderRoutineNote(routineStartLabel) {
   return getRoutineReminderCopy(routineStartLabel);
 }
 
+// localStorage readers and writers validate every saved value before using it,
+// so corrupted or stale data falls back to safe defaults.
 function getSavedRoutineStartTime() {
   try {
     const storedValue = window.localStorage.getItem(ROUTINE_START_STORAGE_KEY)
@@ -645,6 +687,8 @@ function saveLocationForThisDevice(location) {
   }
 }
 
+// Validation and formatting helpers keep sliders, stored values, and labels in
+// the exact shapes the rest of the app expects.
 function isValidSavedLocation(location) {
   const latitude = Number(location?.latitude);
   const longitude = Number(location?.longitude);
@@ -690,6 +734,7 @@ function toReminderLocation(location) {
   };
 }
 
+// Screen navigation keeps tabs and horizontal swipe scrolling in sync.
 function showScreen(screenName) {
   const target = screenName === "weather" ? elements.weatherScreen : elements.checklistScreen;
 
@@ -735,6 +780,7 @@ function trackWeatherScreenView(screenName) {
   trackPilotEvent("weather_screen_viewed");
 }
 
+// Display formatters for timestamps, weather codes, and numeric fallbacks.
 function formatTime(value) {
   return new Intl.DateTimeFormat(undefined, {
     hour: "numeric",
@@ -781,6 +827,8 @@ function bestNumber(...values) {
   return values.find((value) => Number.isFinite(value)) ?? 0;
 }
 
+// Service worker registration supports offline cache and shows a refresh prompt
+// when a new app version is installed.
 function registerServiceWorker() {
   if (!("serviceWorker" in navigator)) {
     return;
@@ -833,6 +881,8 @@ function showUpdateBanner() {
   elements.updateBanner.hidden = false;
 }
 
+// Notification click tracking can arrive either as a service worker message from
+// an already open app or as a URL flag when the app opens from a push.
 function registerServiceWorkerMessages() {
   if (!("serviceWorker" in navigator)) {
     return;
