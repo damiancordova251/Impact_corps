@@ -1,10 +1,26 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
   <title id="title">Ready app icon</title>
-  <desc id="desc">A centered teal umbrella mark on a dark navy background.</desc>
+  <desc id="desc">A white backpack outline with a teal checkmark on a dark navy app icon background.</desc>
+  <defs>
+    <linearGradient id="bg" x1="104" y1="64" x2="408" y2="448" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#14233f"/>
+      <stop offset="1" stop-color="#0f172a"/>
+    </linearGradient>
+    <linearGradient id="check" x1="204" y1="300" x2="324" y2="386" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#7ee7df"/>
+      <stop offset="1" stop-color="#14b8a6"/>
+    </linearGradient>
+  </defs>
   <rect width="512" height="512" fill="#0f172a"/>
-  <g fill="none" stroke="#14b8a6" stroke-width="38" stroke-linecap="round" stroke-linejoin="round">
-    <path fill="#14b8a6" stroke="none" d="M96 297C114 203 179 144 256 144s142 59 160 153H96Z"/>
-    <path stroke="#0f172a" stroke-width="34" d="M139 297c18 27 58 27 76 0 18 27 58 27 76 0 18 27 58 27 76 0"/>
-    <path d="M256 300v82c0 40 32 72 72 72 30 0 56-18 67-44"/>
+  <rect x="30" y="30" width="452" height="452" rx="104" fill="url(#bg)"/>
+  <rect x="34" y="34" width="444" height="444" rx="100" fill="none" stroke="#26395d" stroke-width="6" opacity="0.72"/>
+  <g fill="none" stroke="#f8fafc" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M218 111c0-33 25-58 56-58s56 25 56 58" stroke-width="22"/>
+    <path d="M151 194h-23c-27 0-49 22-49 49v50c0 27 22 49 49 49h23" stroke-width="22"/>
+    <path d="M361 194h23c27 0 49 22 49 49v50c0 27-22 49-49 49h-23" stroke-width="22"/>
+    <path d="M147 171c0-35 28-63 63-63h92c35 0 63 28 63 63v176c0 40-32 72-72 72h-74c-40 0-72-32-72-72V171Z" stroke-width="24"/>
+    <path d="M147 170c10 59 53 97 109 97s99-38 109-97" stroke-width="24"/>
+    <rect x="232" y="242" width="48" height="55" rx="8" stroke-width="20"/>
   </g>
+  <path d="M204 331l39 39 83-88" fill="none" stroke="url(#check)" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>
