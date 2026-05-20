@@ -9,8 +9,16 @@ const DAYLIGHT_START_HOUR = 6;
 const DAYLIGHT_END_HOUR = 20;
 const MAX_CHECKLIST_ITEMS = 6;
 const RAIN_PROBABILITY_THRESHOLD = 40;
-const MEANINGFUL_RAIN_PROBABILITY = 75;
-const MEANINGFUL_PRECIPITATION_INCHES = 0.05;
+const LONG_RAIN_WINDOW_HOURS = 9;
+const LONG_WINDOW_RAIN_PROBABILITY_THRESHOLD = 35;
+const MEASURABLE_RAIN_INCHES = 0.01;
+const MEANINGFUL_RAIN_PROBABILITY = 60;
+const MEANINGFUL_PRECIPITATION_INCHES = 0.03;
+const WATERPROOF_RAIN_INCHES = 0.06;
+const COLD_RAIN_WATERPROOF_INCHES = 0.03;
+const SUSTAINED_RAIN_HOURS = 2;
+const SUSTAINED_RAIN_PROBABILITY = 50;
+const HEAVY_RAIN_CODES = new Set([63, 65, 80, 81, 82, 95, 96, 99]);
 const VERY_COLD_TEMP = 32;
 const COLD_TEMP = 45;
 const COOL_TEMP = 58;
@@ -98,18 +106,12 @@ export function createRecommendation(windowWeather) {
     bestNumber(windowWeather.daily.windMax, 0)
   );
   const precipProbability = bestNumber(windowWeather.daily.precipitationProbability, 0);
-  const currentPrecip = Math.max(
-    bestNumber(windowWeather.current.precipitation, 0),
-    bestNumber(windowWeather.current.rain, 0),
-    bestNumber(windowWeather.current.showers, 0),
-    bestNumber(windowWeather.current.snowfall, 0)
-  );
   const snowAmount = bestNumber(windowWeather.current.snowfall, 0);
+  const rainProfile = getRainProfile(windowWeather, durationHours);
   const currentCode = windowWeather.current.weatherCode;
   const dailyCode = windowWeather.daily.weatherCode;
-  const rainRisk = precipProbability >= RAIN_PROBABILITY_THRESHOLD || currentPrecip > 0 || hasCode(RAIN_CODES, currentCode, dailyCode);
+  const rainRisk = rainProfile.umbrellaRisk;
   const snowRisk = snowAmount > 0 || (precipProbability >= 35 && hasCode(SNOW_CODES, currentCode, dailyCode));
-  const meaningfulRain = rainRisk && (precipProbability >= MEANINGFUL_RAIN_PROBABILITY || currentPrecip >= MEANINGFUL_PRECIPITATION_INCHES);
   const veryCold = feelsLike <= VERY_COLD_TEMP || low <= VERY_COLD_TEMP;
   const cold = feelsLike <= COLD_TEMP || low <= COLD_TEMP - 3;
   const cool = feelsLike <= COOL_TEMP || low <= COOL_TEMP - 4;
@@ -117,6 +119,11 @@ export function createRecommendation(windowWeather) {
   const coldWind = cold && wind >= COLD_WIND_MPH;
   const windy = wind >= WINDY_MPH || coldWind;
   const hot = high >= HOT_TEMP || feelsLike >= HOT_TEMP - 4;
+  const coldRainFootwear = cold
+    && rainRisk
+    && (rainProfile.meaningfulRain || rainProfile.maxPrecipitation >= COLD_RAIN_WATERPROOF_INCHES);
+  const waterproofShoesRisk = snowRisk
+    || (rainRisk && (rainProfile.heavyRain || rainProfile.sustainedRain || coldRainFootwear));
 
   const actions = [];
   const reasons = [];
@@ -165,7 +172,7 @@ export function createRecommendation(windowWeather) {
     reasons.push(getRainReason(precipProbability, durationHours));
   }
 
-  if (snowRisk || (rainRisk && (cold || meaningfulRain))) {
+  if (waterproofShoesRisk) {
     addAction(actions, "Rain boots or waterproof shoes", "Wear rain boots or waterproof shoes", 105);
   }
 
@@ -199,6 +206,59 @@ export function createRecommendation(windowWeather) {
     checklistTitle: READY_CHECKLIST_TITLE,
     items: uniqueActions.slice(0, MAX_CHECKLIST_ITEMS).map((action) => action.item)
   };
+}
+
+// Rain uses a window-level profile so an umbrella can be recommended before
+// later rain starts, while shoes stay reserved for heavier or sustained wetness.
+function getRainProfile(weather, durationHours) {
+  const hours = weather.checklistWindow?.usableHours ?? [];
+  const probabilityThreshold = durationHours >= LONG_RAIN_WINDOW_HOURS
+    ? LONG_WINDOW_RAIN_PROBABILITY_THRESHOLD
+    : RAIN_PROBABILITY_THRESHOLD;
+  const maxProbability = maxFromHours(hours, "precipitationProbability", weather.daily.precipitationProbability);
+  const maxPrecipitation = Math.max(
+    maxFromHours(hours, "precipitation", weather.current.precipitation),
+    maxFromHours(hours, "rain", weather.current.rain),
+    maxFromHours(hours, "showers", weather.current.showers)
+  );
+  const wetHours = hours.filter((hour) => isRainyHour(hour, probabilityThreshold));
+  const hasRainCode = hasCode(RAIN_CODES, weather.current.weatherCode, weather.daily.weatherCode)
+    || hours.some((hour) => hasCode(RAIN_CODES, hour.weatherCode));
+  const heavyRain = maxPrecipitation >= WATERPROOF_RAIN_INCHES
+    || hasCode(HEAVY_RAIN_CODES, weather.current.weatherCode, weather.daily.weatherCode)
+    || hours.some((hour) => hasCode(HEAVY_RAIN_CODES, hour.weatherCode));
+  const sustainedRain = wetHours.length >= SUSTAINED_RAIN_HOURS
+    && (maxProbability >= SUSTAINED_RAIN_PROBABILITY || maxPrecipitation >= MEASURABLE_RAIN_INCHES);
+  const umbrellaRisk = maxProbability >= probabilityThreshold
+    || maxPrecipitation >= MEASURABLE_RAIN_INCHES
+    || hasRainCode;
+  const meaningfulRain = umbrellaRisk
+    && (
+      maxProbability >= MEANINGFUL_RAIN_PROBABILITY
+      || maxPrecipitation >= MEANINGFUL_PRECIPITATION_INCHES
+      || sustainedRain
+    );
+
+  return {
+    umbrellaRisk,
+    meaningfulRain,
+    heavyRain,
+    sustainedRain,
+    maxProbability,
+    maxPrecipitation
+  };
+}
+
+function isRainyHour(hour, probabilityThreshold) {
+  const hourPrecipitation = Math.max(
+    bestNumber(hour.precipitation, 0),
+    bestNumber(hour.rain, 0),
+    bestNumber(hour.showers, 0)
+  );
+
+  return hourPrecipitation >= MEASURABLE_RAIN_INCHES
+    || bestNumber(hour.precipitationProbability, 0) >= probabilityThreshold
+    || hasCode(RAIN_CODES, hour.weatherCode);
 }
 
 // Sun protection is deliberately tied to daylight and sunny hours inside the

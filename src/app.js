@@ -32,8 +32,10 @@ const SAVED_LOCATION_STORAGE_KEY = "readySavedLocation";
 const TIME_AWAY_STORAGE_KEY = "readyExpectedTimeAwayHours";
 const ROUTINE_START_STEP_MINUTES = 30;
 const DEFAULT_ROUTINE_START_MINUTES = 6 * 60;
-const DEFAULT_TIME_AWAY_HOURS = 12;
-const TIME_AWAY_OPTIONS = [3, 6, 9, 12, 15];
+const DEFAULT_TIME_AWAY_HOURS = 6;
+const MAX_TIME_AWAY_HOURS = 12;
+const LEGACY_MAX_TIME_AWAY_HOURS = 15;
+const TIME_AWAY_OPTIONS = [3, 6, 9, 12];
 
 // Runtime state stores the current forecast/session values that multiple UI
 // handlers need to coordinate.
@@ -593,6 +595,11 @@ function getSavedTimeAwayHours() {
 
     if (isValidTimeAwayHours(savedValue)) {
       return savedValue;
+    }
+
+    if (savedValue === LEGACY_MAX_TIME_AWAY_HOURS) {
+      window.localStorage.setItem(TIME_AWAY_STORAGE_KEY, String(MAX_TIME_AWAY_HOURS));
+      return MAX_TIME_AWAY_HOURS;
     }
 
     window.localStorage.removeItem(TIME_AWAY_STORAGE_KEY);

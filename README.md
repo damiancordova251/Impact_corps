@@ -230,33 +230,61 @@ Tracked pilot events:
 
 ## Expected Time Away
 
-The Ready Checklist uses the user's expected time away from home as its forecast window. This answers: "How long do I need to be prepared for before I get back?"
+The Ready Checklist uses the user's expected time away from home as its forecast window. This answers: "How long will I be away from home before I get back?"
 
-- The setting lives in Settings as `How long do you need to be prepared for?`
-- Supported values are `3`, `6`, `9`, `12`, and `15` hours.
-- The default is `12` hours to preserve the original behavior.
+- The setting lives in Settings as `How long will you be away from home?`
+- Supported values are `3`, `6`, `9`, and `12` hours.
+- The default is `6` hours.
+- `12` hours remains available for long days, but it is not the default because long windows can over-recommend items that feel unnecessary.
 - The value is stored only in browser `localStorage`.
 - It is not stored in Supabase and is separate from routine start time.
 - Routine start time controls reminder timing only.
+- If an older browser has `15` hours saved, the app clamps it down to `12` hours.
 
-This improves perceived accuracy and trust. A 9 PM check with a 3-hour window should only consider the next few nighttime hours. A 9 PM check with a 12-hour window may include daylight if the user expects to be away long enough.
+Ready errs on the side of practical preparedness for the time you expect to be away from home. A 9 PM check with a 3-hour window should only consider the next few nighttime hours. A 9 PM check with a 12-hour window may include daylight or later rain if the user expects to be away long enough.
+
+Rain handling is window-aware:
+
+- Umbrella is recommended when meaningful rain risk appears inside the selected window.
+- For `3` and `6` hour windows, rain chance of `40%` or higher can trigger umbrella.
+- For `9` and `12` hour windows, rain chance of `35%` or higher can trigger umbrella because there is more time for the user to get caught away from home.
+- Measurable rain or rain forecast codes inside the window can also trigger umbrella.
+- Rain boots or waterproof shoes are stricter: snow, heavy rain, sustained rain, or cold meaningful rain can trigger them, but tiny drizzle alone should not.
 
 ## Expected Time Away Test
 
 1. Open Settings.
-2. Set `How long do you need to be prepared for?` to `3 hours`.
+2. Set `How long will you be away from home?` to `3 hours`.
 3. Generate or refresh the checklist.
 4. Confirm the helper text says `Prepared for the next 3 hours.`
 5. Change the setting to `6 hours`.
 6. Confirm the checklist updates and the helper text says `Prepared for the next 6 hours.`
 7. In DevTools, remove or corrupt `readyExpectedTimeAwayHours` in `localStorage`.
-8. Reload the app and confirm it falls back to `12 hours`.
+8. Reload the app and confirm it falls back to `6 hours`.
+9. Set `readyExpectedTimeAwayHours` to `15`, reload, and confirm it clamps to `12 hours`.
 
 Night/sun behavior to verify:
 
 - At night with a 3-hour window, sunglasses should not appear unless daylight is inside the next 3 hours.
 - At night with a 12-hour window, sunglasses can appear if daylight and sunny/warm conditions are inside the next 12 hours.
 - During daytime with a 6-hour window, recommendations should use only the next 6 hours.
+
+Synthetic recommendation examples can be run with:
+
+```sh
+npm run test:recommendations
+```
+
+The examples cover:
+
+- Rain starts 8 hours from now: umbrella appears for `9`/`12` hour windows, not `3`/`6`.
+- `30%` future rain chance alone does not add rain gear.
+- `35%` future rain chance can add umbrella for longer windows, not shorter ones.
+- Heavy rain later adds umbrella and waterproof shoes.
+- Light drizzle later can add umbrella but not waterproof shoes.
+- Cold rain adds a warm layer, umbrella, and waterproof shoes when justified.
+- Warm rain adds umbrella without a heavy layer.
+- No rain adds no rain gear.
 
 ## Testing Push
 
