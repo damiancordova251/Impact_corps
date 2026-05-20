@@ -1,4 +1,4 @@
-const APP_VERSION = "prepilot-2026-05-20-backpack-icon";
+const APP_VERSION = "prepilot-2026-05-20-icon-bg-cleanup";
 const CACHE_NAME = `ready-${APP_VERSION}`;
 const CORE_ASSETS = [
   "./",
