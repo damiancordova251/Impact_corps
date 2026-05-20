@@ -2,7 +2,7 @@ const RAIN_CODES = new Set([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 
 const SNOW_CODES = new Set([71, 73, 75, 77, 85, 86]);
 const SUNNY_CODES = new Set([0, 1, 2]);
 const READY_CHECKLIST_TITLE = "Ready Checklist:";
-const FORECAST_WINDOW_HOURS = 12;
+const DEFAULT_FORECAST_WINDOW_HOURS = 12;
 const DAYLIGHT_START_HOUR = 6;
 const DAYLIGHT_END_HOUR = 20;
 const MAX_CHECKLIST_ITEMS = 6;
@@ -17,12 +17,13 @@ const WINDY_MPH = 24;
 const COLD_WIND_MPH = 18;
 const HOT_TEMP = 86;
 
-export function getNextForecastWindow(weather, now = new Date()) {
+export function getNextForecastWindow(weather, now = new Date(), durationHours = DEFAULT_FORECAST_WINDOW_HOURS) {
   const hourly = Array.isArray(weather.hourly) ? weather.hourly : [];
+  const normalizedDurationHours = normalizeForecastWindowHours(durationHours);
   const start = new Date(now);
   const end = new Date(start);
 
-  end.setHours(end.getHours() + FORECAST_WINDOW_HOURS);
+  end.setHours(end.getHours() + normalizedDurationHours);
 
   const hours = hourly.filter((hour) => isWithinWindow(hour, start, end));
   const representativeHour = findNearestHour(hourly, start);
@@ -31,6 +32,7 @@ export function getNextForecastWindow(weather, now = new Date()) {
     title: READY_CHECKLIST_TITLE,
     start,
     end,
+    durationHours: normalizedDurationHours,
     hours,
     representativeHour,
     usableHours: hours.length > 0 ? hours : [representativeHour].filter(Boolean),
@@ -78,6 +80,7 @@ export function buildWindowWeather(weather, forecastWindow) {
 }
 
 export function createRecommendation(windowWeather) {
+  const durationHours = windowWeather.checklistWindow?.durationHours ?? DEFAULT_FORECAST_WINDOW_HOURS;
   const feelsLike = bestNumber(windowWeather.current.feelsLike, windowWeather.current.temperature, windowWeather.daily.high);
   const currentTemp = bestNumber(windowWeather.current.temperature, windowWeather.daily.high, feelsLike);
   const high = bestNumber(windowWeather.daily.high, currentTemp);
@@ -137,7 +140,7 @@ export function createRecommendation(windowWeather) {
     }
   } else if (rainRisk && feelsLike <= 72) {
     addAction(actions, "Light jacket", "Wear a light jacket", 90);
-    reasons.push(getRainReason(precipProbability));
+    reasons.push(getRainReason(precipProbability, durationHours));
   } else if (cool) {
     addAction(actions, "Light jacket", "Wear a light jacket", 90);
     reasons.push(`It feels like ${formatTemp(feelsLike)}.`);
@@ -151,7 +154,7 @@ export function createRecommendation(windowWeather) {
 
   if (rainRisk && !snowRisk) {
     addAction(actions, "Umbrella", "Bring an umbrella", 125);
-    reasons.push(getRainReason(precipProbability));
+    reasons.push(getRainReason(precipProbability, durationHours));
   }
 
   if (snowRisk || (rainRisk && (cold || meaningfulRain))) {
@@ -184,7 +187,7 @@ export function createRecommendation(windowWeather) {
 
   return {
     title: combineActionLabels(uniqueActions.slice(0, 2)),
-    reason: combineReasons(reasons),
+    reason: combineReasons(reasons, durationHours),
     checklistTitle: READY_CHECKLIST_TITLE,
     items: uniqueActions.slice(0, MAX_CHECKLIST_ITEMS).map((action) => action.item)
   };
@@ -325,26 +328,34 @@ function combineActionLabels(actions) {
   return `${actions[0].label} and ${lowerFirst(actions[1].label)}`;
 }
 
-function combineReasons(reasons) {
+function combineReasons(reasons, durationHours) {
   const uniqueReasons = [...new Set(reasons)];
 
   if (uniqueReasons.length === 0) {
-    return "The next 12 hours look manageable.";
+    return `The next ${durationHours} hours look manageable.`;
   }
 
   return uniqueReasons.slice(0, 2).join(" ");
 }
 
-function getRainReason(precipProbability) {
+function getRainReason(precipProbability, durationHours) {
   if (precipProbability > 0) {
     return `Rain risk is ${Math.round(precipProbability)}%.`;
   }
 
-  return "Rain is in the next 12-hour forecast.";
+  return `Rain is in the next ${durationHours}-hour forecast.`;
 }
 
 function lowerFirst(text) {
   return text.charAt(0).toLowerCase() + text.slice(1);
+}
+
+function normalizeForecastWindowHours(value) {
+  const durationHours = Number(value);
+
+  return Number.isFinite(durationHours) && durationHours > 0
+    ? durationHours
+    : DEFAULT_FORECAST_WINDOW_HOURS;
 }
 
 export function formatTemp(value) {

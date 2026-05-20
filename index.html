@@ -34,13 +34,18 @@
             <h1 class="recommendation-title" id="recommendationTitle">Ready Checklist:</h1>
             <div class="completion-mark" id="completionMark" aria-hidden="true">&#10003;</div>
           </div>
-          <p class="reason" id="reasonText">Prepared for the next 12 hours.</p>
+          <p class="reason" id="reasonText">Prepared for your time away.</p>
           <ul class="item-list" id="itemList" aria-label="Checklist items"></ul>
           <button class="primary-action" id="primaryAction" type="button">Use current location</button>
           <details class="settings-panel">
             <summary>Settings</summary>
+            <label class="routine-start-setting" for="timeAwayInput">
+              <span>How long do you need to be prepared for?</span>
+              <strong id="timeAwayValue">12 hours</strong>
+            </label>
+            <input id="timeAwayInput" class="routine-start-slider" type="range" min="3" max="15" step="3" value="12">
             <label class="routine-start-setting" for="routineStartInput">
-              <span>When does your daily routine usually start?</span>
+              <span>When should your daily reminder arrive?</span>
               <strong id="routineStartValue">6:00 AM</strong>
             </label>
             <input id="routineStartInput" class="routine-start-slider" type="range" min="0" max="47" step="1" value="12">

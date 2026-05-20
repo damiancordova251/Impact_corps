@@ -25,10 +25,14 @@ const ROUTINE_START_STORAGE_KEY = "morningWearRoutineStartMinutes";
 const LEGACY_WAKE_TIME_STORAGE_KEY = "morningWearWakeTimeMinutes";
 const PUSH_SUBSCRIPTION_ID_STORAGE_KEY = "morningWearPushSubscriptionId";
 const SAVED_LOCATION_STORAGE_KEY = "readySavedLocation";
+const TIME_AWAY_STORAGE_KEY = "readyExpectedTimeAwayHours";
 const ROUTINE_START_STEP_MINUTES = 30;
 const DEFAULT_ROUTINE_START_MINUTES = 6 * 60;
+const DEFAULT_TIME_AWAY_HOURS = 12;
+const TIME_AWAY_OPTIONS = [3, 6, 9, 12, 15];
 
 const state = {
+  latestWeather: null,
   latestLocation: null,
   pushSubscriptionId: getSavedPushSubscriptionId(),
   completedTrackedForChecklist: false,
@@ -56,6 +60,8 @@ const elements = {
   precipFact: document.querySelector("#precipFact"),
   conditionFact: document.querySelector("#conditionFact"),
   lastUpdatedFact: document.querySelector("#lastUpdatedFact"),
+  timeAwayInput: document.querySelector("#timeAwayInput"),
+  timeAwayValue: document.querySelector("#timeAwayValue"),
   routineStartInput: document.querySelector("#routineStartInput"),
   routineStartValue: document.querySelector("#routineStartValue"),
   notificationStatus: document.querySelector("#notificationStatus"),
@@ -72,6 +78,8 @@ elements.itemList.addEventListener("change", updateCompletionState);
 elements.checklistTab.addEventListener("click", () => showScreen("checklist"));
 elements.weatherTab.addEventListener("click", () => showScreen("weather"));
 elements.screenTrack.addEventListener("scroll", syncActiveScreenFromScroll, { passive: true });
+elements.timeAwayInput.addEventListener("input", handleTimeAwayChange);
+elements.timeAwayInput.addEventListener("change", handleTimeAwayCommit);
 elements.routineStartInput.addEventListener("input", handleRoutineStartChange);
 elements.routineStartInput.addEventListener("change", handleRoutineStartCommit);
 elements.enableNotificationsButton.addEventListener("click", handleEnableNotifications);
@@ -80,6 +88,7 @@ elements.updateRefreshButton?.addEventListener("click", () => {
   window.location.reload();
 });
 window.addEventListener("resize", () => syncActiveScreenFromScroll());
+initializeTimeAwaySetting();
 initializeRoutineStartSetting();
 initializeNotificationSetting();
 registerServiceWorker();
@@ -131,24 +140,27 @@ async function initializeSavedLocationChecklist() {
 }
 
 function renderWindowRecommendation(weather, requestedAt = new Date(), options = {}) {
-  const forecastWindow = getNextForecastWindow(weather, requestedAt);
+  const timeAwayHours = getSavedTimeAwayHours();
+  const forecastWindow = getNextForecastWindow(weather, requestedAt, timeAwayHours);
   const windowWeather = buildWindowWeather(weather, forecastWindow);
   const recommendation = createRecommendation(windowWeather);
 
-  renderRecommendation(weather, recommendation);
+  state.latestWeather = weather;
+  renderRecommendation(weather, recommendation, timeAwayHours);
   trackPilotEvent("checklist_generated", {
     source: options.source ?? "unknown",
     itemCount: recommendation.items.length,
-    hasItems: recommendation.items.length > 0
+    hasItems: recommendation.items.length > 0,
+    expected_time_away_hours: timeAwayHours
   });
 }
 
-function renderRecommendation(weather, recommendation) {
+function renderRecommendation(weather, recommendation, timeAwayHours) {
   elements.appShell.classList.remove("is-error", "is-warning", "is-complete");
   elements.statusPill.textContent = "Updated";
   elements.kicker.textContent = "Today";
   elements.recommendationTitle.textContent = recommendation.checklistTitle ?? "Ready Checklist:";
-  elements.reasonText.textContent = getChecklistPrompt();
+  elements.reasonText.textContent = getChecklistPrompt(timeAwayHours);
   elements.primaryAction.disabled = false;
   elements.primaryAction.textContent = "Update location";
 
@@ -199,7 +211,7 @@ function setLoading(label) {
   elements.statusPill.textContent = "Loading";
   elements.kicker.textContent = label;
   elements.recommendationTitle.textContent = "Ready Checklist:";
-  elements.reasonText.textContent = "Checking today's weather.";
+  elements.reasonText.textContent = `Checking weather for the next ${getSavedTimeAwayHours()} hours.`;
   elements.primaryAction.disabled = true;
   elements.primaryAction.textContent = "Checking...";
   elements.appStatus.textContent = "Location is stored on this device only.";
@@ -260,8 +272,8 @@ function clearItems() {
   updateCompletionState();
 }
 
-function getChecklistPrompt() {
-  return "Prepared for the next 12 hours.";
+function getChecklistPrompt(timeAwayHours = getSavedTimeAwayHours()) {
+  return `Prepared for the next ${timeAwayHours} hours.`;
 }
 
 function getErrorCopy(error) {
@@ -328,6 +340,31 @@ function resetFacts() {
   elements.precipFact.textContent = "--";
   elements.conditionFact.textContent = "--";
   elements.lastUpdatedFact.textContent = "--";
+}
+
+function initializeTimeAwaySetting() {
+  const timeAwayHours = getSavedTimeAwayHours();
+
+  elements.timeAwayInput.value = String(timeAwayHours);
+  elements.timeAwayValue.textContent = formatHourLabel(timeAwayHours);
+  elements.reasonText.textContent = getChecklistPrompt(timeAwayHours);
+}
+
+function handleTimeAwayChange() {
+  const timeAwayHours = Number(elements.timeAwayInput.value);
+
+  saveTimeAwayHours(timeAwayHours);
+  elements.timeAwayValue.textContent = formatHourLabel(getSavedTimeAwayHours());
+  elements.reasonText.textContent = getChecklistPrompt();
+  elements.appStatus.textContent = `Checklist window saved for ${formatHourLabel(getSavedTimeAwayHours())}.`;
+}
+
+function handleTimeAwayCommit() {
+  if (!state.latestWeather) {
+    return;
+  }
+
+  renderWindowRecommendation(state.latestWeather, new Date(), { source: "time_away_updated" });
 }
 
 function initializeRoutineStartSetting() {
@@ -502,6 +539,28 @@ function getSavedRoutineStartTime() {
   return DEFAULT_ROUTINE_START_MINUTES;
 }
 
+function getSavedTimeAwayHours() {
+  try {
+    const storedValue = window.localStorage.getItem(TIME_AWAY_STORAGE_KEY);
+
+    if (storedValue === null) {
+      return DEFAULT_TIME_AWAY_HOURS;
+    }
+
+    const savedValue = Number(storedValue);
+
+    if (isValidTimeAwayHours(savedValue)) {
+      return savedValue;
+    }
+
+    window.localStorage.removeItem(TIME_AWAY_STORAGE_KEY);
+  } catch (error) {
+    return DEFAULT_TIME_AWAY_HOURS;
+  }
+
+  return DEFAULT_TIME_AWAY_HOURS;
+}
+
 function saveRoutineStartTime(routineStartTime) {
   if (!isValidRoutineStartTime(routineStartTime)) {
     return;
@@ -511,6 +570,18 @@ function saveRoutineStartTime(routineStartTime) {
     window.localStorage.setItem(ROUTINE_START_STORAGE_KEY, String(routineStartTime));
   } catch (error) {
     elements.appStatus.textContent = "Start time could not be saved.";
+  }
+}
+
+function saveTimeAwayHours(timeAwayHours) {
+  if (!isValidTimeAwayHours(timeAwayHours)) {
+    return;
+  }
+
+  try {
+    window.localStorage.setItem(TIME_AWAY_STORAGE_KEY, String(timeAwayHours));
+  } catch (error) {
+    elements.appStatus.textContent = "Checklist window could not be saved.";
   }
 }
 
@@ -593,6 +664,10 @@ function isValidRoutineStartTime(value) {
     && value % ROUTINE_START_STEP_MINUTES === 0;
 }
 
+function isValidTimeAwayHours(value) {
+  return Number.isInteger(value) && TIME_AWAY_OPTIONS.includes(value);
+}
+
 function formatTimeLabel(minutes) {
   const date = new Date();
   date.setHours(0, minutes, 0, 0);
@@ -601,6 +676,10 @@ function formatTimeLabel(minutes) {
     hour: "numeric",
     minute: "2-digit"
   }).format(date);
+}
+
+function formatHourLabel(hours) {
+  return `${hours} ${hours === 1 ? "hour" : "hours"}`;
 }
 
 function toReminderLocation(location) {

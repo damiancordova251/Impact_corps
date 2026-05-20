@@ -1,6 +1,6 @@
 # Ready
 
-Ready is a PWA that creates a Ready Checklist from the next 12 hours of weather.
+Ready is a PWA that creates a Ready Checklist from the weather window you expect to be away from home.
 
 ## Pre-Pilot Polish
 
@@ -226,15 +226,48 @@ Tracked pilot events:
 - `weather_screen_viewed`
 - `location_updated`
 
+`checklist_generated` events may include the selected `expected_time_away_hours` value as non-sensitive metadata.
+
+## Expected Time Away
+
+The Ready Checklist uses the user's expected time away from home as its forecast window. This answers: "How long do I need to be prepared for before I get back?"
+
+- The setting lives in Settings as `How long do you need to be prepared for?`
+- Supported values are `3`, `6`, `9`, `12`, and `15` hours.
+- The default is `12` hours to preserve the original behavior.
+- The value is stored only in browser `localStorage`.
+- It is not stored in Supabase and is separate from routine start time.
+- Routine start time controls reminder timing only.
+
+This improves perceived accuracy and trust. A 9 PM check with a 3-hour window should only consider the next few nighttime hours. A 9 PM check with a 12-hour window may include daylight if the user expects to be away long enough.
+
+## Expected Time Away Test
+
+1. Open Settings.
+2. Set `How long do you need to be prepared for?` to `3 hours`.
+3. Generate or refresh the checklist.
+4. Confirm the helper text says `Prepared for the next 3 hours.`
+5. Change the setting to `6 hours`.
+6. Confirm the checklist updates and the helper text says `Prepared for the next 6 hours.`
+7. In DevTools, remove or corrupt `readyExpectedTimeAwayHours` in `localStorage`.
+8. Reload the app and confirm it falls back to `12 hours`.
+
+Night/sun behavior to verify:
+
+- At night with a 3-hour window, sunglasses should not appear unless daylight is inside the next 3 hours.
+- At night with a 12-hour window, sunglasses can appear if daylight and sunny/warm conditions are inside the next 12 hours.
+- During daytime with a 6-hour window, recommendations should use only the next 6 hours.
+
 ## Testing Push
 
 1. Open `http://localhost:3000`.
 2. Open Settings.
-3. Choose your routine start time.
-4. Tap `Enable reminders`.
-5. Grant notification permission.
-6. The backend saves the push subscription, routine start time, timezone, and reminder send metadata in Supabase.
-7. To send a backend push immediately, run:
+3. Choose your expected time away if needed.
+4. Choose your routine start time.
+5. Tap `Enable reminders`.
+6. Grant notification permission.
+7. The backend saves the push subscription, routine start time, timezone, and reminder send metadata in Supabase.
+8. To send a backend push immediately, run:
 
 ```sh
 curl -X POST http://localhost:3000/api/push/test \
@@ -320,11 +353,12 @@ Localhost testing is useful on desktop browsers. iPhone testing usually needs an
 2. Use Safari Share, then Add to Home Screen.
 3. Open Ready from the Home Screen icon.
 4. Open Settings.
-5. Choose a routine start time.
-6. Tap `Enable reminders`.
-7. Allow notifications.
-8. Confirm a Supabase row exists in `push_subscriptions`.
-9. From your computer, send a backend test push:
+5. Choose your expected time away if needed.
+6. Choose a routine start time.
+7. Tap `Enable reminders`.
+8. Allow notifications.
+9. Confirm a Supabase row exists in `push_subscriptions`.
+10. From your computer, send a backend test push:
 
 ```sh
 curl -X POST https://your-service-name.onrender.com/api/push/test \
@@ -332,12 +366,12 @@ curl -X POST https://your-service-name.onrender.com/api/push/test \
   -d "{}"
 ```
 
-10. Confirm the notification reaches the iPhone Home Screen PWA.
-11. Set the routine start time to the next `:00` or `:30` minute.
-12. Keep the deployed service awake by opening the app shortly before the reminder time.
-13. Confirm the scheduled notification arrives.
-14. Confirm `last_sent_date` updates in Supabase.
-15. Keep the app/service active through the same minute and confirm no duplicate reminder is sent for the same local date.
+11. Confirm the notification reaches the iPhone Home Screen PWA.
+12. Set the routine start time to the next `:00` or `:30` minute.
+13. Keep the deployed service awake by opening the app shortly before the reminder time.
+14. Confirm the scheduled notification arrives.
+15. Confirm `last_sent_date` updates in Supabase.
+16. Keep the app/service active through the same minute and confirm no duplicate reminder is sent for the same local date.
 
 ## PWA Cache and Icon Troubleshooting
 

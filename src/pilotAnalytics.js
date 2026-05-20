@@ -78,6 +78,10 @@ function sanitizeMetadata(metadata) {
     clean.itemCount = Math.max(0, Math.min(metadata.itemCount, 20));
   }
 
+  if (Number.isInteger(metadata.expected_time_away_hours)) {
+    clean.expected_time_away_hours = Math.max(3, Math.min(metadata.expected_time_away_hours, 15));
+  }
+
   if (typeof metadata.hasItems === "boolean") {
     clean.hasItems = metadata.hasItems;
   }
