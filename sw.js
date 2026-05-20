@@ -1,4 +1,4 @@
-const APP_VERSION = "prepilot-2026-05-20-umbrella-cache";
+const APP_VERSION = "prepilot-2026-05-20-icon-unify";
 const CACHE_NAME = `ready-${APP_VERSION}`;
 const CORE_ASSETS = [
   "./",
