@@ -1,9 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
   <title id="title">Ready app icon</title>
-  <desc id="desc">Sun, cloud, and umbrella mark.</desc>
+  <desc id="desc">Centered teal umbrella mark.</desc>
   <rect width="512" height="512" rx="96" fill="#0f172a"/>
-  <circle cx="178" cy="154" r="64" fill="#f59e0b"/>
-  <path d="M150 258c10-50 54-88 108-88 46 0 86 28 102 68 45 4 80 42 80 88 0 49-40 89-89 89H151c-45 0-82-37-82-82 0-40 29-73 67-80 4 1 9 3 14 5Z" fill="#f8fafc"/>
-  <path d="M116 334c20-44 65-74 117-74s97 30 117 74H116Z" fill="#14b8a6"/>
-  <path d="M232 334v68c0 23 19 42 42 42 18 0 34-12 40-29" fill="none" stroke="#14b8a6" stroke-width="32" stroke-linecap="round"/>
+  <path d="M88 304c24-92 90-152 168-152s144 60 168 152H88Z" fill="#14b8a6"/>
+  <path d="M256 304v78c0 36 29 66 66 66 29 0 54-18 63-45" fill="none" stroke="#14b8a6" stroke-width="42" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

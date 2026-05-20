@@ -62,6 +62,8 @@ const elements = {
   notificationRoutineNote: document.querySelector("#notificationRoutineNote"),
   enableNotificationsButton: document.querySelector("#enableNotificationsButton"),
   testNotificationButton: document.querySelector("#testNotificationButton"),
+  updateBanner: document.querySelector("#updateBanner"),
+  updateRefreshButton: document.querySelector("#updateRefreshButton"),
   appStatus: document.querySelector("#appStatus")
 };
 
@@ -74,6 +76,9 @@ elements.routineStartInput.addEventListener("input", handleRoutineStartChange);
 elements.routineStartInput.addEventListener("change", handleRoutineStartCommit);
 elements.enableNotificationsButton.addEventListener("click", handleEnableNotifications);
 elements.testNotificationButton.addEventListener("click", handleTestNotification);
+elements.updateRefreshButton?.addEventListener("click", () => {
+  window.location.reload();
+});
 window.addEventListener("resize", () => syncActiveScreenFromScroll());
 initializeRoutineStartSetting();
 initializeNotificationSetting();
@@ -703,10 +708,50 @@ function registerServiceWorker() {
   }
 
   window.addEventListener("load", () => {
-    navigator.serviceWorker.register("./sw.js").catch(() => {
-      elements.appStatus.textContent = `${APP_CONFIG.appName} is running without offline cache.`;
+    navigator.serviceWorker
+      .register("./sw.js")
+      .then(watchForServiceWorkerUpdates)
+      .catch(() => {
+        elements.appStatus.textContent = `${APP_CONFIG.appName} is running without offline cache.`;
+      });
+  });
+}
+
+function watchForServiceWorkerUpdates(registration) {
+  const hadController = Boolean(navigator.serviceWorker.controller);
+
+  if (registration.waiting && hadController) {
+    showUpdateBanner();
+  }
+
+  registration.addEventListener("updatefound", () => {
+    const newWorker = registration.installing;
+
+    if (!newWorker) {
+      return;
+    }
+
+    newWorker.addEventListener("statechange", () => {
+      if (newWorker.state === "installed" && navigator.serviceWorker.controller) {
+        showUpdateBanner();
+      }
     });
   });
+
+  navigator.serviceWorker.addEventListener("controllerchange", () => {
+    if (hadController) {
+      showUpdateBanner();
+    }
+  });
+}
+
+function showUpdateBanner() {
+  if (!elements.updateBanner) {
+    elements.appStatus.textContent = "Update available. Refresh to get the latest version.";
+    return;
+  }
+
+  elements.updateBanner.hidden = false;
 }
 
 function registerServiceWorkerMessages() {

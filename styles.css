@@ -524,6 +524,44 @@ button {
   color: var(--warning);
 }
 
+.update-banner {
+  position: fixed;
+  right: max(16px, env(safe-area-inset-right));
+  bottom: max(16px, env(safe-area-inset-bottom));
+  left: max(16px, env(safe-area-inset-left));
+  z-index: 20;
+  max-width: 448px;
+  margin: 0 auto;
+  border: 1px solid rgba(15, 23, 42, 0.12);
+  border-radius: 8px;
+  padding: 10px 10px 10px 14px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 14px 36px rgba(15, 23, 42, 0.18);
+  color: var(--text);
+  font-size: 0.9rem;
+  font-weight: 800;
+}
+
+.update-banner[hidden] {
+  display: none;
+}
+
+.update-banner button {
+  min-height: 38px;
+  border: 0;
+  border-radius: 7px;
+  padding: 0 14px;
+  background: var(--text);
+  color: #ffffff;
+  font-size: 0.88rem;
+  font-weight: 850;
+  cursor: pointer;
+}
+
 @media (min-width: 720px) {
   body {
     display: grid;

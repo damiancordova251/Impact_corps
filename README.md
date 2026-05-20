@@ -341,16 +341,36 @@ curl -X POST https://your-service-name.onrender.com/api/push/test \
 
 ## PWA Cache and Icon Troubleshooting
 
-This app uses a service worker cache. When app shell files change, old cached files can sometimes linger on iPhone.
+Ready uses a service worker cache. The current strategy is:
 
-If an old version appears, buttons stop responding, or the Home Screen icon/name does not update:
+- App shell files such as HTML, CSS, JS, and the manifest are network-first, with cached files as an offline fallback.
+- Icon assets are cache-first.
+- The service worker has an explicit `APP_VERSION` in `sw.js`; bump it for future app-shell deployments.
+- Old caches are deleted during service worker activation.
+- A newly installed service worker calls `skipWaiting()` and `clients.claim()` so fixes take control quickly.
+- If an update is detected while the app is open, a small `Update available` refresh prompt appears.
 
-1. Delete the installed Home Screen app.
-2. In iPhone Settings, clear Safari website data for the deployed site if needed.
-3. Open the deployed URL again in Safari.
-4. Add Ready to the Home Screen again.
+Tradeoff: `skipWaiting()` and `clients.claim()` make pilot fixes appear sooner, but an open app may still need one refresh to load the newest JavaScript.
 
-Existing installed PWAs may need to be removed and re-added before icon or app name updates appear.
+After a new deployment:
+
+1. Open the deployed URL.
+2. Confirm the app loads and the checklist button works.
+3. Open `https://your-service-name.onrender.com/manifest.webmanifest` and confirm the manifest loads.
+4. Open `https://your-service-name.onrender.com/icons/app-icon-180.png` and confirm the icon loads.
+5. If `Update available` appears, tap `Refresh`.
+6. On iPhone, open the Home Screen app and confirm the checklist still works.
+
+If a tester sees an old version, buttons stop responding, or the Home Screen icon/name does not update:
+
+1. Tap `Refresh` if the update prompt appears.
+2. Fully close and reopen the Home Screen app.
+3. Delete the installed Home Screen app.
+4. In iPhone Settings, clear Safari website data for the deployed site if needed.
+5. Open the deployed URL again in Safari.
+6. Add Ready to the Home Screen again.
+
+Existing installed PWAs may need to be removed and re-added before icon or app name updates appear. This is especially likely after icon changes.
 
 ## Production Notes
 

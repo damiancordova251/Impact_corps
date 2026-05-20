@@ -1,13 +1,10 @@
-const CACHE_NAME = "ready-v1";
-const APP_SHELL = [
+const APP_VERSION = "prepilot-2026-05-20-umbrella-cache";
+const CACHE_NAME = `ready-${APP_VERSION}`;
+const CORE_ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
   "./manifest.webmanifest",
-  "./icons/app-icon.svg",
-  "./icons/app-icon-180.png",
-  "./icons/app-icon-192.png",
-  "./icons/app-icon-512.png",
   "./src/app.js",
   "./src/config.js",
   "./src/location.js",
@@ -17,10 +14,20 @@ const APP_SHELL = [
   "./src/weather.js",
   "./src/recommendation.js"
 ];
+const ICON_ASSETS = [
+  "./icons/app-icon.svg",
+  "./icons/app-icon-180.png",
+  "./icons/app-icon-192.png",
+  "./icons/app-icon-512.png"
+];
+const ICON_PATHS = new Set(ICON_ASSETS.map(toAssetPath));
 
 self.addEventListener("install", (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL))
+    caches.open(CACHE_NAME).then((cache) => cache.addAll([
+      ...CORE_ASSETS,
+      ...ICON_ASSETS
+    ]))
   );
   self.skipWaiting();
 });
@@ -45,9 +52,23 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  event.respondWith(
-    caches.match(event.request).then((cached) => cached || fetch(event.request))
-  );
+  const requestUrl = new URL(event.request.url);
+
+  if (requestUrl.origin !== self.location.origin || requestUrl.pathname.startsWith("/api/")) {
+    return;
+  }
+
+  if (event.request.mode === "navigate") {
+    event.respondWith(networkFirst(event.request, "./index.html"));
+    return;
+  }
+
+  if (ICON_PATHS.has(requestUrl.pathname)) {
+    event.respondWith(cacheFirst(event.request));
+    return;
+  }
+
+  event.respondWith(networkFirst(event.request));
 });
 
 self.addEventListener("push", (event) => {
@@ -71,6 +92,49 @@ self.addEventListener("notificationclick", (event) => {
 
   event.waitUntil(openOrFocusAppFromNotification(event.notification.data?.url));
 });
+
+async function networkFirst(request, fallbackUrl = null) {
+  const cache = await caches.open(CACHE_NAME);
+
+  try {
+    const response = await fetch(request);
+
+    if (response.ok) {
+      await cache.put(request, response.clone());
+    }
+
+    return response;
+  } catch (error) {
+    const cached = await caches.match(request);
+
+    if (cached) {
+      return cached;
+    }
+
+    if (fallbackUrl) {
+      return caches.match(fallbackUrl);
+    }
+
+    throw error;
+  }
+}
+
+async function cacheFirst(request) {
+  const cached = await caches.match(request);
+
+  if (cached) {
+    return cached;
+  }
+
+  const response = await fetch(request);
+
+  if (response.ok) {
+    const cache = await caches.open(CACHE_NAME);
+    await cache.put(request, response.clone());
+  }
+
+  return response;
+}
 
 function getPushReminder(event) {
   if (!event.data) {
@@ -129,4 +193,8 @@ function getNotificationClickUrl(notificationUrl) {
 
   targetUrl.searchParams.set("notification", "clicked");
   return targetUrl.href;
+}
+
+function toAssetPath(asset) {
+  return new URL(asset, self.registration.scope).pathname;
 }
