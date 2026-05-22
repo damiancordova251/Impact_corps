@@ -200,6 +200,7 @@ CF-2 API limitation:
 - The Pages app will not have `/api/*` routes until CF-3.
 - Checklist generation and weather can still be tested because weather uses the public Open-Meteo API directly.
 - Server-backed flows such as push subscription saving, backend test push, scheduled reminder API behavior, and pilot analytics should be considered incomplete on the Pages URL until CF-3.
+- After CF-3, Pages Functions provide same-origin `/api/*` routes for the Pages URL.
 
 Origin and PWA notes:
 
@@ -217,6 +218,115 @@ find dist -maxdepth 2 -type f | sort
 ```
 
 Confirm `dist/` contains the PWA assets and does not contain `server`, `workers`, `.env`, `.dev.vars`, `node_modules`, or backend-only files.
+
+## Cloudflare Pages CF-3 API Functions
+
+CF-3 moves the Express API behavior to Cloudflare Pages Functions while keeping Render online as a fallback. The static PWA stays in `dist/`, and Cloudflare serves `/api/*` from the repo's `functions/` directory on the same Pages origin.
+
+Cost warning:
+
+- This stage is designed for Cloudflare Pages Free, Cloudflare Workers Free, Supabase Free, and Render Free for a 5-10 person pilot.
+- Do not enable Workers Paid, paid Cloudflare storage, paid custom domains, paid Render, paid Supabase, or billing upgrades unless explicitly approved.
+- Cloudflare Free limits still apply to Pages builds, Pages Functions requests, CPU time, and Worker Cron invocations. A small pilot should fit, but this is not production-scale hosting.
+
+Cloudflare API structure:
+
+- `functions/api/health.js` handles `GET /api/health`.
+- `functions/api/push/public-key.js` handles `GET /api/push/public-key`.
+- `functions/api/push/subscriptions.js` handles `POST /api/push/subscriptions` and `GET /api/push/subscriptions`.
+- `functions/api/push/test.js` handles `POST /api/push/test`.
+- `functions/api/pilot-events.js` handles `POST /api/pilot-events`.
+- `functions/_shared/backend.js` contains shared Supabase REST, validation, and Web Push helpers.
+
+This keeps frontend calls as relative `/api/...` URLs. The Pages app and API are same-origin, so no CORS configuration is needed for normal use.
+
+Web Push compatibility:
+
+- Pages Functions use `@block65/webcrypto-web-push`, the same Cloudflare-compatible Web Crypto approach used by the reminder Cron Worker.
+- The Node-only `web-push` package remains for the local/Render Express backend, but it is not used by Cloudflare Pages Functions.
+- Notification copy is unchanged: `Ready Checklist` and `Your weather checklist is ready.`
+
+Root Cloudflare config:
+
+- `wrangler.toml` sets the Pages output directory to `dist`.
+- It also sets the compatibility date and `nodejs_compat` flag for local Pages Functions testing.
+- Secrets are not stored in `wrangler.toml`.
+
+Required Cloudflare Pages variables and secrets:
+
+- `SUPABASE_URL`
+- `SUPABASE_SERVICE_ROLE_KEY`
+- `SUPABASE_PUSH_SUBSCRIPTIONS_TABLE=push_subscriptions`
+- `SUPABASE_PILOT_EVENTS_TABLE=pilot_events`
+- `VAPID_PUBLIC_KEY`
+- `VAPID_PRIVATE_KEY`
+- `VAPID_SUBJECT`
+
+Keep these backend-only values in Cloudflare Pages project variables/secrets. The Supabase service role key and VAPID private key must never be placed in `src/`, `index.html`, `sw.js`, `manifest.webmanifest`, or any public static file.
+
+Cloudflare Pages deployment:
+
+```text
+Build command: npm run build:pages
+Output directory: dist
+Functions directory: functions
+```
+
+You can configure variables in the Cloudflare dashboard under the Pages project settings, or with Wrangler:
+
+```sh
+npx wrangler pages secret put SUPABASE_URL
+npx wrangler pages secret put SUPABASE_SERVICE_ROLE_KEY
+npx wrangler pages secret put VAPID_PUBLIC_KEY
+npx wrangler pages secret put VAPID_PRIVATE_KEY
+npx wrangler pages secret put VAPID_SUBJECT
+```
+
+Use normal non-secret variables for the table names if you do not want to rely on defaults.
+
+Local CF-3 checks:
+
+```sh
+npm run check
+npm run build:pages
+npx wrangler pages dev dist
+```
+
+Then test:
+
+- `http://localhost:8788/api/health`
+- `http://localhost:8788/api/push/public-key`
+- `POST http://localhost:8788/api/pilot-events` with a small anonymous test payload
+
+For real push testing, use the deployed HTTPS Pages URL on iPhone. Push subscriptions are origin-bound, so local desktop testing cannot replace the iPhone installed-PWA test.
+
+iPhone CF-3 test plan:
+
+1. Keep Render deployed and working as fallback.
+2. Deploy Cloudflare Pages with the CF-3 Functions and required variables/secrets.
+3. Open the Pages HTTPS URL in iPhone Safari.
+4. Delete/re-add the Home Screen PWA for the Pages URL because the origin changed from Render.
+5. Open the Pages Home Screen app.
+6. Enable reminders and allow notifications.
+7. Confirm Supabase has a new `push_subscriptions` row for the Pages-origin PWA.
+8. Use the app's backend test push control, or call `POST /api/push/test` with that new subscription id.
+9. Confirm the iPhone receives `Ready Checklist`.
+10. Confirm anonymous pilot events appear in `pilot_events`.
+11. Confirm the separate Cloudflare Cron Worker still sends scheduled reminders and updates `last_sent_date`.
+
+Migration cautions:
+
+- A Pages URL such as `https://ready.pages.dev` is a different origin from the Render URL.
+- Existing Render-origin Home Screen installs should be removed and re-added from the Pages URL.
+- Push subscriptions do not carry over between origins. Users must enable reminders again from the Pages-origin PWA.
+- Old Render-origin rows may remain in Supabase until cleanup. Avoid sending `/api/push/test` to all subscriptions during migration unless you are comfortable notifying old installs too.
+- Do not turn off Render until the Pages PWA, `/api/*` routes, push subscription creation, backend test push, pilot events, and scheduled Cron reminders are verified.
+
+Rollback:
+
+1. Keep or restore the Render URL as the tester-facing URL.
+2. If needed, set Cloudflare Cron `DRY_RUN=true`.
+3. Keep Render scheduler disabled or re-enable it only after confirming the Cron Worker is not sending real reminders.
 
 ## Render Deployment Steps
 
