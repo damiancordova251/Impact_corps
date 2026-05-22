@@ -1,5 +1,5 @@
-import { buildPushPayload } from "@block65/webcrypto-web-push";
 import { createChecklistReminder } from "../../src/reminders.js";
+import { buildPushPayload } from "./webPush.js";
 
 const DEFAULT_PUSH_SUBSCRIPTIONS_TABLE = "push_subscriptions";
 const DEFAULT_PILOT_EVENTS_TABLE = "pilot_events";

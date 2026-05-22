@@ -242,14 +242,16 @@ This keeps frontend calls as relative `/api/...` URLs. The Pages app and API are
 
 Web Push compatibility:
 
-- Pages Functions use `@block65/webcrypto-web-push`, the same Cloudflare-compatible Web Crypto approach used by the reminder Cron Worker.
+- Pages Functions use a small Web Crypto-only helper in `functions/_shared/webPush.js`.
+- The separate reminder Cron Worker still uses `@block65/webcrypto-web-push`; that Worker keeps its own dependency and configuration.
 - The Node-only `web-push` package remains for the local/Render Express backend, but it is not used by Cloudflare Pages Functions.
 - Notification copy is unchanged: `Ready Checklist` and `Your weather checklist is ready.`
 
 Root Cloudflare config:
 
 - `wrangler.toml` sets the Pages output directory to `dist`.
-- It also sets the compatibility date and `nodejs_compat` flag for local Pages Functions testing.
+- It also sets the Pages Functions compatibility date to `2024-11-01`.
+- The Pages app does not enable `nodejs_compat`; these Functions use Cloudflare-compatible Web APIs to avoid Node polyfill or top-level await syntax issues during publish.
 - Secrets are not stored in `wrangler.toml`.
 
 Required Cloudflare Pages variables and secrets:
@@ -289,7 +291,7 @@ Local CF-3 checks:
 ```sh
 npm run check
 npm run build:pages
-npx wrangler pages dev dist
+npx wrangler pages dev dist --compatibility-date=2024-11-01
 ```
 
 Then test:
