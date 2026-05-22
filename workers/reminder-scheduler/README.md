@@ -32,7 +32,7 @@ These non-secret vars are included in `wrangler.toml`:
 - `CRON_WINDOW_MINUTES=5`
 - `DRY_RUN=true`
 
-Keep `DRY_RUN=true` until the Worker can read Supabase and identify due reminders correctly. Set `DRY_RUN=false` only when ready for real sends.
+Keep `DRY_RUN=true` until the Worker can read Supabase and identify due reminders correctly. Do not set deployed `DRY_RUN=false` until Render has `ENABLE_EXPRESS_SCHEDULER=false`.
 
 ## Local Setup
 
@@ -86,11 +86,18 @@ Cloudflare Cron Trigger changes can take several minutes to propagate.
 
 ## Render Scheduler Handoff
 
-Before setting `DRY_RUN=false` in the deployed Worker, configure Render with:
+Use this order to avoid duplicate scheduled reminders:
+
+1. Deploy this Worker with `DRY_RUN=true`.
+2. Verify it can read Supabase and identify due/not-due reminders without sending.
+3. Configure Render with:
 
 ```txt
 ENABLE_EXPRESS_SCHEDULER=false
 ```
+
+4. Restart/redeploy Render and confirm logs show `Express reminder scheduler disabled by ENABLE_EXPRESS_SCHEDULER=false.`
+5. Set this Worker's `DRY_RUN=false` only after Render's scheduler is disabled.
 
 This keeps the PWA and API online but stops Render's scheduled reminder loop so the Worker is the only scheduled sender.
 

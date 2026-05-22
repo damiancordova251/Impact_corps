@@ -404,7 +404,7 @@ CRON_WINDOW_MINUTES=5
 DRY_RUN=true
 ```
 
-Keep `DRY_RUN=true` until Supabase reads and due-reminder detection are verified. Set `DRY_RUN=false` only when you are ready to send real notifications.
+Keep `DRY_RUN=true` until Supabase reads and due-reminder detection are verified. Do not set `DRY_RUN=false` in the deployed Worker until Render has `ENABLE_EXPRESS_SCHEDULER=false`.
 
 Local Worker test:
 
@@ -434,7 +434,7 @@ Real Worker send test:
 7. Confirm `last_sent_date` updates.
 8. Trigger it again and confirm no duplicate sends for the same local date.
 
-Deploy Worker:
+Deploy Worker in dry-run mode:
 
 ```sh
 cd workers/reminder-scheduler
@@ -447,11 +447,18 @@ npx wrangler secret put VAPID_SUBJECT
 npm run deploy
 ```
 
-Before real deployed sends, configure Render:
+Safe handoff order:
+
+1. Deploy the Worker with `DRY_RUN=true`.
+2. Verify the Worker can read Supabase and identify due/not-due reminders without sending.
+3. Configure Render with:
 
 ```text
 ENABLE_EXPRESS_SCHEDULER=false
 ```
+
+4. Restart/redeploy Render and confirm logs show `Express reminder scheduler disabled by ENABLE_EXPRESS_SCHEDULER=false.`
+5. Set the Worker `DRY_RUN=false` only after Render's scheduler is disabled.
 
 This prevents duplicate scheduled reminders. Render will still serve the PWA and API routes.
 

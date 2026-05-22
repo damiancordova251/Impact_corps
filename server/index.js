@@ -37,7 +37,6 @@ const app = express();
 const port = Number(process.env.PORT) || 3000;
 const host = process.env.HOST || "0.0.0.0";
 const schedulerIntervalMs = Number(process.env.SCHEDULER_INTERVAL_MS) || 30000;
-const expressSchedulerEnabled = process.env.ENABLE_EXPRESS_SCHEDULER !== "false";
 const pushConfig = configureWebPush();
 
 // Only these anonymous event names are accepted from the frontend pilot
@@ -203,6 +202,11 @@ servePwaFiles(app);
 app.listen(port, host, () => {
   console.log(`Ready running at http://${host}:${port}`);
 
+  if (!isExpressSchedulerEnabled()) {
+    console.log("Express reminder scheduler disabled by ENABLE_EXPRESS_SCHEDULER=false.");
+    return;
+  }
+
   if (!pushConfig.configured) {
     console.log("VAPID keys are missing. Copy .env.example to .env and add generated keys.");
     return;
@@ -210,11 +214,6 @@ app.listen(port, host, () => {
 
   if (!isSubscriptionStoreConfigured()) {
     console.log("Supabase storage is missing. Add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to .env.");
-    return;
-  }
-
-  if (!expressSchedulerEnabled) {
-    console.log("Express reminder scheduler is disabled. Scheduled reminders should be handled by Cloudflare Worker Cron.");
     return;
   }
 
@@ -240,6 +239,10 @@ async function sendReminder(record) {
 
     throw error;
   }
+}
+
+function isExpressSchedulerEnabled() {
+  return String(process.env.ENABLE_EXPRESS_SCHEDULER ?? "true").toLowerCase() !== "false";
 }
 
 // Validates the subscription payload before it reaches Supabase or Web Push.
