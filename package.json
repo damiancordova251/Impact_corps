@@ -8,7 +8,7 @@
     "start": "node server/index.js",
     "generate:vapid": "web-push generate-vapid-keys",
     "test:recommendations": "node tests/recommendation.test.js",
-    "check": "node --check server/index.js && node --check server/pilotEventStore.js && node --check server/pushService.js && node --check server/scheduler.js && node --check server/subscriptionStore.js && node --check server/time.js && node --check src/app.js && node --check src/notifications.js && node --check src/pilotAnalytics.js && node --check src/reminders.js && node --check src/recommendation.js && node --check src/weather.js && node --check tests/recommendation.test.js && node --check sw.js"
+    "check": "node --check server/index.js && node --check server/pilotEventStore.js && node --check server/pushService.js && node --check server/scheduler.js && node --check server/subscriptionStore.js && node --check server/time.js && node --check src/app.js && node --check src/notifications.js && node --check src/pilotAnalytics.js && node --check src/reminders.js && node --check src/recommendation.js && node --check src/weather.js && node --check tests/recommendation.test.js && node --check workers/reminder-scheduler/src/index.js && node --check sw.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.0",

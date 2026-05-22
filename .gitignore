@@ -1,6 +1,7 @@
 # Local environment files can contain Supabase service keys and VAPID secrets.
 .env.local
 .env.*.local
+.dev.vars
 
 .env
 

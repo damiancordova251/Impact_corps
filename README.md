@@ -11,7 +11,7 @@ This stage prepares the PWA and Express backend for personal iPhone testing and 
 - The Supabase service role key must never be exposed to frontend JavaScript.
 - Exact location is not stored in Supabase.
 - There are no accounts or user records yet.
-- The scheduler is a simple interval that checks saved subscriptions.
+- Local development can use the Express interval scheduler, but pilot scheduled reminders should run from Cloudflare Worker Cron to avoid Render Free sleep.
 - The notification is intentionally simple: it opens the app, where the Ready Checklist is generated.
 
 ## Install
@@ -34,6 +34,7 @@ HOST=127.0.0.1
 VAPID_PUBLIC_KEY=your_public_key
 VAPID_PRIVATE_KEY=your_private_key
 VAPID_SUBJECT=mailto:you@example.com
+ENABLE_EXPRESS_SCHEDULER=true
 SCHEDULER_INTERVAL_MS=30000
 SUPABASE_URL=https://your-project-ref.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your_backend_only_service_role_key
@@ -172,10 +173,13 @@ SUPABASE_URL=https://your-project-ref.supabase.co
 SUPABASE_SERVICE_ROLE_KEY=your_backend_only_service_role_key
 SUPABASE_PUSH_SUBSCRIPTIONS_TABLE=push_subscriptions
 SUPABASE_PILOT_EVENTS_TABLE=pilot_events
+ENABLE_EXPRESS_SCHEDULER=false
 SCHEDULER_INTERVAL_MS=30000
 ```
 
 Do not set `HOST` on Render unless you set it to `0.0.0.0`. Render provides `PORT` automatically, so do not hardcode `PORT`.
+
+Set `ENABLE_EXPRESS_SCHEDULER=false` on Render when Cloudflare Worker Cron is active. This keeps the PWA and API running but prevents Render from sending duplicate scheduled reminders.
 
 Never commit secrets. Keep `.env` local and configure hosted secrets only in the Render dashboard.
 
@@ -354,14 +358,109 @@ curl -X POST http://localhost:3000/api/push/test \
 
 ## Scheduled Reminder Behavior
 
-The backend checks subscriptions every `SCHEDULER_INTERVAL_MS`.
+In local development, the Express backend can check subscriptions every `SCHEDULER_INTERVAL_MS`.
 
-For each subscription, it compares the current time in the user's saved IANA timezone with the saved routine start time. If the minute matches and the reminder has not already been sent for that local date, the backend sends:
+For pilot testing on Render Free, scheduled reminders should be handled by Cloudflare Worker Cron because Render Free services can sleep. The Worker reads the same Supabase `push_subscriptions` table, checks due reminders every 5 minutes, sends Web Push, and updates `last_sent_date`.
+
+For each subscription, it compares the current time in the user's saved IANA timezone with the saved routine start time. If the reminder is due and has not already been sent for that local date, the scheduler sends:
 
 - Title: `Ready Checklist`
 - Body: `Your weather checklist is ready.`
 
 The notification click opens or focuses the PWA.
+
+## Cloudflare Worker Cron Scheduler
+
+Ready includes a separate scheduler Worker in `workers/reminder-scheduler/`. This does not move the frontend or Express API to Cloudflare. Render still serves the app and API; Cloudflare only runs the scheduled reminder job.
+
+Why it exists:
+
+- Render Free can sleep, so its interval scheduler can miss reminder times.
+- Cloudflare Cron Triggers run independently of Render being awake.
+- Supabase remains the source of truth for subscriptions and `last_sent_date`.
+
+Cost warning:
+
+- This is designed for Cloudflare Workers Free, Supabase Free, and Render Free for a 5-10 person pilot.
+- The Worker runs every 5 minutes, about 288 invocations per day.
+- Workers Free has request, CPU, subrequest, and cron-trigger limits. This design is not production scale.
+- Do not enable Workers Paid, paid Cloudflare storage, paid Supabase, or paid Render unless explicitly approved.
+
+Worker secrets:
+
+```text
+SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_backend_only_service_role_key
+VAPID_PUBLIC_KEY=your_public_key
+VAPID_PRIVATE_KEY=your_private_key
+VAPID_SUBJECT=mailto:you@example.com
+```
+
+Worker vars:
+
+```text
+SUPABASE_PUSH_SUBSCRIPTIONS_TABLE=push_subscriptions
+CRON_WINDOW_MINUTES=5
+DRY_RUN=true
+```
+
+Keep `DRY_RUN=true` until Supabase reads and due-reminder detection are verified. Set `DRY_RUN=false` only when you are ready to send real notifications.
+
+Local Worker test:
+
+```sh
+cd workers/reminder-scheduler
+npm install
+cp .dev.vars.example .dev.vars
+npm run dev
+```
+
+In another terminal:
+
+```sh
+curl "http://localhost:8787/cdn-cgi/handler/scheduled?cron=*/5+*+*+*+*"
+```
+
+With `DRY_RUN=true`, the Worker logs due reminders but does not send pushes or update `last_sent_date`.
+
+Real Worker send test:
+
+1. Confirm your iPhone PWA subscription exists in Supabase.
+2. Set the row's `routine_start_minutes` to the next 5-minute local window.
+3. Clear `last_sent_date` or set it to an earlier date.
+4. Set `DRY_RUN=false` locally.
+5. Trigger the local scheduled handler.
+6. Confirm the iPhone receives `Ready Checklist`.
+7. Confirm `last_sent_date` updates.
+8. Trigger it again and confirm no duplicate sends for the same local date.
+
+Deploy Worker:
+
+```sh
+cd workers/reminder-scheduler
+npm install
+npx wrangler secret put SUPABASE_URL
+npx wrangler secret put SUPABASE_SERVICE_ROLE_KEY
+npx wrangler secret put VAPID_PUBLIC_KEY
+npx wrangler secret put VAPID_PRIVATE_KEY
+npx wrangler secret put VAPID_SUBJECT
+npm run deploy
+```
+
+Before real deployed sends, configure Render:
+
+```text
+ENABLE_EXPRESS_SCHEDULER=false
+```
+
+This prevents duplicate scheduled reminders. Render will still serve the PWA and API routes.
+
+To roll back:
+
+1. Set the Worker `DRY_RUN=true` or remove the Worker Cron Trigger.
+2. Set Render `ENABLE_EXPRESS_SCHEDULER=true` or remove the variable.
+3. Restart/deploy Render.
+4. Confirm Render logs show `Reminder scheduler running`.
 
 ## iPhone / Safari Notes
 

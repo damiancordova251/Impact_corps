@@ -37,6 +37,7 @@ const app = express();
 const port = Number(process.env.PORT) || 3000;
 const host = process.env.HOST || "0.0.0.0";
 const schedulerIntervalMs = Number(process.env.SCHEDULER_INTERVAL_MS) || 30000;
+const expressSchedulerEnabled = process.env.ENABLE_EXPRESS_SCHEDULER !== "false";
 const pushConfig = configureWebPush();
 
 // Only these anonymous event names are accepted from the frontend pilot
@@ -209,6 +210,11 @@ app.listen(port, host, () => {
 
   if (!isSubscriptionStoreConfigured()) {
     console.log("Supabase storage is missing. Add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY to .env.");
+    return;
+  }
+
+  if (!expressSchedulerEnabled) {
+    console.log("Express reminder scheduler is disabled. Scheduled reminders should be handled by Cloudflare Worker Cron.");
     return;
   }
 
