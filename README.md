@@ -146,6 +146,78 @@ Other options considered:
 - Fly.io: powerful, but it is not a true free tier and requires close billing management.
 - Koyeb: has a free web instance, but requires card verification and the free instance scales to zero after inactivity.
 
+## Cloudflare Pages CF-2 Static PWA Export
+
+CF-2 prepares a clean static PWA deployment for Cloudflare Pages Free. It does not move API routes yet, does not remove Render, and does not change push subscription behavior.
+
+Cost warning:
+
+- This stage is designed for Cloudflare Pages Free, Cloudflare Workers Free, Supabase Free, and Render Free.
+- Do not enable paid Pages features, Workers Paid, paid Cloudflare storage, paid custom domains, paid Render, paid Supabase, or billing upgrades unless explicitly approved.
+- Cloudflare Pages Free has platform limits such as monthly build/deploy limits, but this small static PWA should fit normal pilot testing.
+
+The Pages export uses an explicit frontend allowlist. It copies only:
+
+- `index.html`
+- `styles.css`
+- `src/`
+- `icons/`
+- `manifest.webmanifest`
+- `sw.js`
+
+It does not copy:
+
+- `server/`
+- `workers/`
+- `.env`
+- `.dev.vars`
+- Supabase service keys
+- VAPID private keys
+- README files
+- `node_modules/`
+- package lock files
+- backend-only files
+
+Build locally:
+
+```sh
+npm run build:pages
+```
+
+Cloudflare Pages setup:
+
+```text
+Build command: npm run build:pages
+Output directory: dist
+```
+
+No frontend bundling is required. `sw.js` and `manifest.webmanifest` are copied to the root of `dist/`, so service worker scope and manifest paths are preserved. Existing relative paths such as `src/app.js`, `styles.css`, and `icons/app-icon.svg` remain compatible.
+
+CF-2 API limitation:
+
+- The Cloudflare Pages version is for static PWA shell testing only.
+- Render remains the working PWA/API host during CF-2.
+- The Pages app will not have `/api/*` routes until CF-3.
+- Checklist generation and weather can still be tested because weather uses the public Open-Meteo API directly.
+- Server-backed flows such as push subscription saving, backend test push, scheduled reminder API behavior, and pilot analytics should be considered incomplete on the Pages URL until CF-3.
+
+Origin and PWA notes:
+
+- A Pages URL such as `https://ready.pages.dev` is a different origin from `https://ready-ussg.onrender.com`.
+- iPhone users should install the Pages URL as a new Home Screen PWA when testing CF-2.
+- Service worker scope changes to the Pages origin.
+- Push subscriptions from the Render origin do not carry over automatically.
+- Old Render-origin Supabase subscriptions should not be cleaned up until a later API/push migration stage.
+
+CF-2 local verification:
+
+```sh
+npm run build:pages
+find dist -maxdepth 2 -type f | sort
+```
+
+Confirm `dist/` contains the PWA assets and does not contain `server`, `workers`, `.env`, `.dev.vars`, `node_modules`, or backend-only files.
+
 ## Render Deployment Steps
 
 1. Push this repo to GitHub.

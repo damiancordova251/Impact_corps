@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "build:pages": "node scripts/build-pages.js",
     "dev": "node server/index.js",
     "start": "node server/index.js",
     "generate:vapid": "web-push generate-vapid-keys",

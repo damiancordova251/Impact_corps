@@ -7,3 +7,9 @@
 
 # Installed dependencies are restored from package-lock.json.
 node_modules/
+
+# Static Cloudflare Pages export output.
+dist/
+
+# Wrangler local build/cache output.
+.wrangler/
