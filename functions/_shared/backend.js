@@ -1,6 +1,3 @@
-import { createChecklistReminder } from "../../src/reminders.js";
-import { buildPushPayload } from "./webPush.js";
-
 const DEFAULT_PUSH_SUBSCRIPTIONS_TABLE = "push_subscriptions";
 const DEFAULT_PILOT_EVENTS_TABLE = "pilot_events";
 const MAX_JSON_BODY_LENGTH = 128 * 1024;
@@ -191,35 +188,6 @@ export async function insertPilotEvent({ anonymousDeviceId, eventType, metadata 
       })
     }
   });
-}
-
-// Web Push uses the same Worker-compatible Web Crypto library as the Cron
-// Worker, avoiding the Node-only web-push package in Cloudflare.
-export async function sendReadyChecklistPush(record, env) {
-  const vapid = {
-    subject: env.VAPID_SUBJECT,
-    publicKey: env.VAPID_PUBLIC_KEY,
-    privateKey: env.VAPID_PRIVATE_KEY
-  };
-  const message = {
-    data: createChecklistReminder({ url: "/" }),
-    options: {
-      ttl: 60 * 60,
-      topic: "ready-checklist"
-    }
-  };
-  const requestInit = await buildPushPayload(message, record.subscription, vapid);
-  const response = await fetch(record.subscription.endpoint, requestInit);
-
-  if (response.ok) {
-    return;
-  }
-
-  throw new PushSendError(response.status, await response.text().catch(() => ""));
-}
-
-export function isSubscriptionGone(error) {
-  return error?.statusCode === 404 || error?.statusCode === 410;
 }
 
 // Validation mirrors the existing Express routes before anything reaches
@@ -421,12 +389,4 @@ function sanitizePilotEventMetadata(metadata) {
   }
 
   return clean;
-}
-
-class PushSendError extends Error {
-  constructor(statusCode, responseBody) {
-    super(`Push service request failed with ${statusCode}. ${responseBody}`);
-    this.name = "PushSendError";
-    this.statusCode = statusCode;
-  }
 }

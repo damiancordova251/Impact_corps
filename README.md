@@ -234,16 +234,17 @@ Cloudflare API structure:
 - `functions/api/health.js` handles `GET /api/health`.
 - `functions/api/push/public-key.js` handles `GET /api/push/public-key`.
 - `functions/api/push/subscriptions.js` handles `POST /api/push/subscriptions` and `GET /api/push/subscriptions`.
-- `functions/api/push/test.js` handles `POST /api/push/test`.
+- `functions/api/push/test.js` temporarily returns `501` on Cloudflare Pages.
 - `functions/api/pilot-events.js` handles `POST /api/pilot-events`.
-- `functions/_shared/backend.js` contains shared Supabase REST, validation, and Web Push helpers.
+- `functions/_shared/backend.js` contains shared Supabase REST and validation helpers.
 
 This keeps frontend calls as relative `/api/...` URLs. The Pages app and API are same-origin, so no CORS configuration is needed for normal use.
 
 Web Push compatibility:
 
-- Pages Functions use a small Web Crypto-only helper in `functions/_shared/webPush.js`.
-- The separate reminder Cron Worker still uses `@block65/webcrypto-web-push`; that Worker keeps its own dependency and configuration.
+- Pages Functions do not send Web Push directly in CF-3. This keeps the Pages bundle free of Node built-ins such as `node:stream`, `node:crypto`, and Buffer-dependent packages.
+- `POST /api/push/test` on Cloudflare Pages returns `501`: `Cloudflare Pages test push is not enabled yet; scheduled push is handled by the Cron Worker.`
+- The separate reminder Cron Worker still sends scheduled Web Push and keeps its own `@block65/webcrypto-web-push` dependency and configuration.
 - The Node-only `web-push` package remains for the local/Render Express backend, but it is not used by Cloudflare Pages Functions.
 - Notification copy is unchanged: `Ready Checklist` and `Your weather checklist is ready.`
 
@@ -300,7 +301,7 @@ Then test:
 - `http://localhost:8788/api/push/public-key`
 - `POST http://localhost:8788/api/pilot-events` with a small anonymous test payload
 
-For real push testing, use the deployed HTTPS Pages URL on iPhone. Push subscriptions are origin-bound, so local desktop testing cannot replace the iPhone installed-PWA test.
+For real scheduled push testing, use the deployed HTTPS Pages URL on iPhone and the separate Cloudflare Cron Worker. Push subscriptions are origin-bound, so local desktop testing cannot replace the iPhone installed-PWA test.
 
 iPhone CF-3 test plan:
 
@@ -311,18 +312,17 @@ iPhone CF-3 test plan:
 5. Open the Pages Home Screen app.
 6. Enable reminders and allow notifications.
 7. Confirm Supabase has a new `push_subscriptions` row for the Pages-origin PWA.
-8. Use the app's backend test push control, or call `POST /api/push/test` with that new subscription id.
-9. Confirm the iPhone receives `Ready Checklist`.
-10. Confirm anonymous pilot events appear in `pilot_events`.
-11. Confirm the separate Cloudflare Cron Worker still sends scheduled reminders and updates `last_sent_date`.
+8. Confirm anonymous pilot events appear in `pilot_events`.
+9. Confirm the separate Cloudflare Cron Worker sends scheduled reminders to the new Pages-origin subscription and updates `last_sent_date`.
+10. Expect `POST /api/push/test` on the Pages URL to return `501` until Cloudflare Pages test push is implemented in a later stage.
 
 Migration cautions:
 
 - A Pages URL such as `https://ready.pages.dev` is a different origin from the Render URL.
 - Existing Render-origin Home Screen installs should be removed and re-added from the Pages URL.
 - Push subscriptions do not carry over between origins. Users must enable reminders again from the Pages-origin PWA.
-- Old Render-origin rows may remain in Supabase until cleanup. Avoid sending `/api/push/test` to all subscriptions during migration unless you are comfortable notifying old installs too.
-- Do not turn off Render until the Pages PWA, `/api/*` routes, push subscription creation, backend test push, pilot events, and scheduled Cron reminders are verified.
+- Old Render-origin rows may remain in Supabase until cleanup.
+- Do not turn off Render until the Pages PWA, `/api/*` routes, push subscription creation, pilot events, and scheduled Cron reminders are verified.
 
 Rollback:
 
