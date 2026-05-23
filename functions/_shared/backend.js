@@ -173,8 +173,8 @@ export function toPublicSubscription(record) {
   };
 }
 
-// Pilot event writes remain anonymous and intentionally small. Failures are
-// handled softly by the route so analytics never break the app.
+// Pilot event writes remain anonymous and intentionally small.
+// Failures are handled softly by the route so analytics never break the app.
 export async function insertPilotEvent({ anonymousDeviceId, eventType, metadata }, env) {
   await supabaseFetch(env, {
     path: pilotEventsTablePath(env),
