@@ -13,20 +13,21 @@ export function isSubscriptionStoreConfigured() {
   return Boolean(process.env.SUPABASE_URL && process.env.SUPABASE_SERVICE_ROLE_KEY);
 }
 
-// Creates or updates the row for one browser push endpoint while preserving the
-// last sent date used for duplicate-reminder prevention.
+// Creates or updates the row for one browser push endpoint. Re-saving the same
+// schedule preserves duplicate-reminder state; changing reminder timing resets it.
 export async function upsertSubscription(input) {
   const subscription = input.subscription;
   const id = createSubscriptionId(subscription.endpoint);
   const existing = await getSubscription(id);
   const now = new Date().toISOString();
+  const scheduleChanged = hasScheduleChanged(existing, input);
 
   const row = {
     id,
     subscription,
     routine_start_minutes: input.routineStartMinutes,
     timezone: input.timezone,
-    last_sent_date: existing?.lastSentDate ?? null,
+    last_sent_date: scheduleChanged ? null : (existing?.lastSentDate ?? null),
     updated_at: now
   };
 
@@ -141,6 +142,14 @@ function createSubscriptionId(endpoint) {
     .update(endpoint)
     .digest("hex")
     .slice(0, 20);
+}
+
+function hasScheduleChanged(existing, input) {
+  return Boolean(existing)
+    && (
+      existing.routineStartMinutes !== input.routineStartMinutes
+      || existing.timezone !== input.timezone
+    );
 }
 
 function toRecord(row) {

@@ -79,18 +79,20 @@ export function isPilotEventStoreConfigured(env) {
 }
 
 // Subscription storage mirrors the Express API contract while using Supabase
-// REST calls that run in Cloudflare's Worker runtime.
+// REST calls that run in Cloudflare's Worker runtime. Schedule changes reset
+// duplicate-reminder state so the updated time can send later the same day.
 export async function upsertSubscription(input, env) {
   const subscription = input.subscription;
   const id = await createSubscriptionId(subscription.endpoint);
   const existing = await getSubscription(id, env);
   const now = new Date().toISOString();
+  const scheduleChanged = hasScheduleChanged(existing, input);
   const row = {
     id,
     subscription,
     routine_start_minutes: input.routineStartMinutes,
     timezone: input.timezone,
-    last_sent_date: existing?.lastSentDate ?? null,
+    last_sent_date: scheduleChanged ? null : (existing?.lastSentDate ?? null),
     updated_at: now
   };
 
@@ -301,6 +303,14 @@ async function createSubscriptionId(endpoint) {
     .map((byte) => byte.toString(16).padStart(2, "0"))
     .join("")
     .slice(0, 20);
+}
+
+function hasScheduleChanged(existing, input) {
+  return Boolean(existing)
+    && (
+      existing.routineStartMinutes !== input.routineStartMinutes
+      || existing.timezone !== input.timezone
+    );
 }
 
 function pushSubscriptionsTablePath(env) {

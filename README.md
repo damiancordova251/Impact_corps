@@ -553,6 +553,8 @@ For each subscription, it compares the current time in the user's saved IANA tim
 
 The notification click opens or focuses the PWA.
 
+Changing the reminder time or timezone makes the subscription eligible for a new same-day reminder by clearing `last_sent_date`. Re-saving the same reminder time and timezone preserves `last_sent_date` so duplicate same-day reminders are still avoided.
+
 ## Cloudflare Worker Cron Scheduler
 
 Ready includes a separate scheduler Worker in `workers/reminder-scheduler/`. This does not move the frontend or Express API to Cloudflare. Render still serves the app and API; Cloudflare only runs the scheduled reminder job.
@@ -617,6 +619,17 @@ Real Worker send test:
 6. Confirm the iPhone receives `Ready Checklist`.
 7. Confirm `last_sent_date` updates.
 8. Trigger it again and confirm no duplicate sends for the same local date.
+
+Reminder schedule update test:
+
+1. Set a reminder time and let or simulate a send today.
+2. Confirm `last_sent_date` is today's local date.
+3. Change the reminder time or timezone in the app.
+4. Confirm `last_sent_date` becomes `null` in Supabase.
+5. Let Cron run at the new reminder time.
+6. Confirm the reminder sends and `last_sent_date` updates to today's local date.
+7. Re-save the same reminder time and timezone again.
+8. Confirm `last_sent_date` stays today's local date and no duplicate reminder sends.
 
 Deploy Worker in dry-run mode:
 
