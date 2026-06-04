@@ -152,17 +152,10 @@ function getWindowFeatures(weather) {
   const coldWind = cold && wind >= COLD_WIND_MPH;
   const windy = wind >= WINDY_MPH || coldWind;
   const daylightHours = getDaylightHours(hours);
-  const daylightSunny = daylightHours.some((hour) => hasCode(SUNNY_CODES, hour.weatherCode));
   const hot = high >= HOT_TEMP || maxFeels >= HOT_TEMP - 4;
   const cloudy = hours.some(isCloudyHour) || isCloudyCode(currentCode) || isCloudyCode(dailyCode);
   const temperatureRange = Math.max(high, maxTemp) - Math.min(low, minTemp);
-  const sunProtection = shouldRecommendSunProtection(weather, {
-    hot,
-    high: Math.max(high, maxTemp),
-    currentTemp,
-    rainRisk: rainProfile.umbrellaRisk,
-    snowRisk
-  });
+  const daylightSunny = daylightHours.some((hour) => hasCode(SUNNY_CODES, hour.weatherCode));
   const reasons = [];
 
   if (winterPrecipRisk) {
@@ -207,7 +200,6 @@ function getWindowFeatures(weather) {
     hot,
     cloudy,
     temperatureRange,
-    sunProtection,
     reasons
   };
 }
@@ -267,7 +259,7 @@ function getEligibleBottomOptions(features) {
   const dryWarmEnough = !features.winterPrecipRisk && !features.rainRisk;
   const shortsBridgeWeather = features.maxFeels >= 65
     && features.maxFeels <= 72
-    && features.sunProtection
+    && features.daylightSunny
     && !features.windy
     && dryWarmEnough
     && features.minFeels >= 58;
@@ -315,10 +307,6 @@ function getAccessoryActions(features) {
 
   if (features.rainRisk && !features.winterPrecipRisk) {
     accessories.push({ item: "Umbrella / Rain Jacket", priority: 80 });
-  }
-
-  if (features.sunProtection) {
-    accessories.push({ item: "Sunglasses / Hat", priority: 70 });
   }
 
   if (features.minFeels <= 40 || (features.windy && features.minFeels <= 45)) {
@@ -492,18 +480,7 @@ function isRainyHour(hour, probabilityThreshold) {
     || hasCode(RAIN_CODES, hour.weatherCode);
 }
 
-// Sun protection is deliberately tied to bright daylight inside the selected
-// checklist window, not warm temperatures or the full day.
-function shouldRecommendSunProtection(weather, conditions) {
-  const daylightHours = getDaylightHours(weather.checklistWindow?.usableHours ?? []);
-  const daylightSunny = daylightHours.some((hour) => hasCode(SUNNY_CODES, hour.weatherCode));
-
-  return daylightHours.length > 0
-    && daylightSunny
-    && !conditions.snowRisk;
-}
-
-// Daylight helpers support the sunglasses/hat rule without depending on a
+// Daylight helpers support window-level reasoning without depending on a
 // separate sunrise API.
 export function hasDaylightHours(hours) {
   return getDaylightHours(Array.isArray(hours) ? hours : []).length > 0;

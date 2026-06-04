@@ -29,6 +29,7 @@ const BOTTOM_OPTIONS = [
   "Thermal Pants"
 ];
 const REMOVED_PHRASES = [
+  "Sunglasses / Hat",
   "Sunglasses or hat",
   "Waterproof Layer",
   "Water-resistant pants",
@@ -187,7 +188,7 @@ function optionGroup(item) {
 
   assertIncludes(items, "T-shirt / Polo Shirt / Tank Top", "Hot sunny dry day should include flexible warm tops.");
   assertIncludes(items, "Shorts / Skirt / Cargo Pants", "Hot sunny dry day should include flexible warm bottoms.");
-  assertIncludes(items, "Sunglasses / Hat", "Hot sunny dry day should include sun protection.");
+  assertExcludes(items, "Sunglasses / Hat", "Hot sunny dry day should not include sun protection.");
   assertHasTopAndBottom(items, "Hot sunny dry day");
 }
 
@@ -203,7 +204,7 @@ function optionGroup(item) {
 
   assertIncludes(items, "T-shirt / Polo Shirt / Light Long-Sleeve", "Mild sunny day should include flexible mild tops.");
   assertIncludes(items, "Shorts / Cargo Pants / Jeans", "Mild sunny day should bridge shorts and pants.");
-  assertIncludes(items, "Sunglasses / Hat", "Mild sunny daytime forecast should include sun protection.");
+  assertExcludes(items, "Sunglasses / Hat", "Mild sunny daytime forecast should not include sun protection.");
 }
 
 {
