@@ -3,6 +3,7 @@
 const RAIN_CODES = new Set([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99]);
 const SNOW_CODES = new Set([71, 73, 75, 77, 85, 86]);
 const SUNNY_CODES = new Set([0, 1, 2]);
+const FREEZING_PRECIP_CODES = new Set([56, 57, 66, 67]);
 const READY_CHECKLIST_TITLE = "Ready Checklist:";
 const DEFAULT_FORECAST_WINDOW_HOURS = 12;
 const DAYLIGHT_START_HOUR = 6;
@@ -14,8 +15,7 @@ const LONG_WINDOW_RAIN_PROBABILITY_THRESHOLD = 35;
 const MEASURABLE_RAIN_INCHES = 0.01;
 const MEANINGFUL_RAIN_PROBABILITY = 60;
 const MEANINGFUL_PRECIPITATION_INCHES = 0.03;
-const WATERPROOF_RAIN_INCHES = 0.06;
-const COLD_RAIN_WATERPROOF_INCHES = 0.03;
+const HEAVY_RAIN_INCHES = 0.06;
 const SUSTAINED_RAIN_HOURS = 2;
 const SUSTAINED_RAIN_PROBABILITY = 50;
 const HEAVY_RAIN_CODES = new Set([63, 65, 80, 81, 82, 95, 96, 99]);
@@ -93,119 +93,350 @@ export function buildWindowWeather(weather, forecastWindow) {
   };
 }
 
-// Converts summarized weather conditions into checklist items, keeping each
-// item scored so the most important recommendations appear first.
+// Converts summarized weather conditions into checklist items. Clothing is
+// built from eligible top and bottom options first, then conditional accessories
+// are added for weather-specific needs.
 export function createRecommendation(windowWeather) {
-  const durationHours = windowWeather.checklistWindow?.durationHours ?? DEFAULT_FORECAST_WINDOW_HOURS;
-  const feelsLike = bestNumber(windowWeather.current.feelsLike, windowWeather.current.temperature, windowWeather.daily.high);
-  const currentTemp = bestNumber(windowWeather.current.temperature, windowWeather.daily.high, feelsLike);
-  const high = bestNumber(windowWeather.daily.high, currentTemp);
-  const low = bestNumber(windowWeather.daily.low, feelsLike);
+  const features = getWindowFeatures(windowWeather);
+  const topOptions = selectClothingOptions(getEligibleTopOptions(features), getFallbackTopOptions(features), features);
+  const bottomOptions = selectClothingOptions(getEligibleBottomOptions(features), getFallbackBottomOptions(features), features);
+  const accessories = getAccessoryActions(features);
+  const actions = [
+    { item: formatOptionGroup(topOptions), priority: 200 },
+    { item: formatOptionGroup(bottomOptions), priority: 190 },
+    ...accessories
+  ];
+
+  return {
+    title: "Ready for your weather window",
+    reason: combineReasons(features.reasons, features.durationHours),
+    checklistTitle: READY_CHECKLIST_TITLE,
+    items: actions.slice(0, MAX_CHECKLIST_ITEMS).map((action) => action.item)
+  };
+}
+
+function getWindowFeatures(weather) {
+  const durationHours = weather.checklistWindow?.durationHours ?? DEFAULT_FORECAST_WINDOW_HOURS;
+  const hours = weather.checklistWindow?.usableHours ?? [];
+  const feelsLike = bestNumber(weather.current.feelsLike, weather.current.temperature, weather.daily.high);
+  const currentTemp = bestNumber(weather.current.temperature, weather.daily.high, feelsLike);
+  const high = bestNumber(weather.daily.high, currentTemp);
+  const low = bestNumber(weather.daily.low, feelsLike);
+  const maxTemp = maxFromHours(hours, "temperature", high);
+  const minTemp = minFromHours(hours, "temperature", low);
+  const maxFeels = maxFromHours(hours, "feelsLike", Math.max(feelsLike, high));
+  const minFeels = minFromHours(hours, "feelsLike", Math.min(feelsLike, low));
   const wind = Math.max(
-    bestNumber(windowWeather.current.windSpeed, 0),
-    bestNumber(windowWeather.daily.windMax, 0)
+    bestNumber(weather.current.windSpeed, 0),
+    bestNumber(weather.daily.windMax, 0),
+    maxFromHours(hours, "windSpeed", 0)
   );
-  const precipProbability = bestNumber(windowWeather.daily.precipitationProbability, 0);
-  const snowAmount = bestNumber(windowWeather.current.snowfall, 0);
-  const rainProfile = getRainProfile(windowWeather, durationHours);
-  const currentCode = windowWeather.current.weatherCode;
-  const dailyCode = windowWeather.daily.weatherCode;
-  const rainRisk = rainProfile.umbrellaRisk;
-  const snowRisk = snowAmount > 0 || (precipProbability >= 35 && hasCode(SNOW_CODES, currentCode, dailyCode));
-  const veryCold = feelsLike <= VERY_COLD_TEMP || low <= VERY_COLD_TEMP;
-  const cold = feelsLike <= COLD_TEMP || low <= COLD_TEMP - 3;
-  const cool = feelsLike <= COOL_TEMP || low <= COOL_TEMP - 4;
-  const sweatshirtWeather = feelsLike <= SWEATSHIRT_TEMP || low <= SWEATSHIRT_TEMP - 6;
+  const rainProfile = getRainProfile(weather, durationHours);
+  const precipProbability = rainProfile.maxProbability;
+  const currentCode = weather.current.weatherCode;
+  const dailyCode = weather.daily.weatherCode;
+  const snowAmount = Math.max(
+    bestNumber(weather.current.snowfall, 0),
+    maxFromHours(hours, "snowfall", 0)
+  );
+  const snowRisk = snowAmount > 0
+    || hasCode(SNOW_CODES, currentCode, dailyCode)
+    || hours.some((hour) => hasCode(SNOW_CODES, hour.weatherCode));
+  const freezingPrecipRisk = hasCode(FREEZING_PRECIP_CODES, currentCode, dailyCode)
+    || hours.some((hour) => hasCode(FREEZING_PRECIP_CODES, hour.weatherCode))
+    || (rainProfile.umbrellaRisk && minFeels <= 34);
+  const winterPrecipRisk = snowRisk || freezingPrecipRisk;
+  const veryCold = minFeels <= VERY_COLD_TEMP || low <= VERY_COLD_TEMP;
+  const cold = minFeels <= COLD_TEMP || low <= COLD_TEMP - 3;
+  const cool = minFeels <= COOL_TEMP || low <= COOL_TEMP - 4;
   const coldWind = cold && wind >= COLD_WIND_MPH;
   const windy = wind >= WINDY_MPH || coldWind;
-  const hot = high >= HOT_TEMP || feelsLike >= HOT_TEMP - 4;
-  const coldRainFootwear = cold
-    && rainRisk
-    && (rainProfile.meaningfulRain || rainProfile.maxPrecipitation >= COLD_RAIN_WATERPROOF_INCHES);
-  const waterproofShoesRisk = snowRisk
-    || (rainRisk && (rainProfile.heavyRain || rainProfile.sustainedRain || coldRainFootwear));
-
-  const actions = [];
+  const daylightHours = getDaylightHours(hours);
+  const daylightSunny = daylightHours.some((hour) => hasCode(SUNNY_CODES, hour.weatherCode));
+  const hot = high >= HOT_TEMP || maxFeels >= HOT_TEMP - 4;
+  const cloudy = hours.some(isCloudyHour) || isCloudyCode(currentCode) || isCloudyCode(dailyCode);
+  const temperatureRange = Math.max(high, maxTemp) - Math.min(low, minTemp);
+  const sunProtection = shouldRecommendSunProtection(weather, {
+    hot,
+    high: Math.max(high, maxTemp),
+    currentTemp,
+    rainRisk: rainProfile.umbrellaRisk,
+    snowRisk
+  });
   const reasons = [];
 
-  if (snowRisk) {
-    addAction(actions, "Heavy coat", "Wear a heavy coat", 130);
-    addAction(actions, "Gloves", "Wear gloves", 120);
-    addAction(actions, "Beanie", "Wear a beanie", 115);
-    addAction(actions, "Scarf", "Wear a scarf", 110);
-    addAction(actions, "Rain boots or waterproof shoes", "Wear rain boots or waterproof shoes", 105);
-    reasons.push("Snow is likely today.");
-  } else if (veryCold) {
-    addAction(actions, "Heavy coat", "Wear a heavy coat", 130);
-    addAction(actions, "Gloves", "Wear gloves", 120);
-    addAction(actions, "Beanie", "Wear a beanie", 115);
-    addAction(actions, "Scarf", "Wear a scarf", 110);
-    reasons.push(`It feels like ${formatTemp(feelsLike)}.`);
-  } else if (cold) {
-    addAction(actions, "Heavy coat", "Wear a heavy coat", 130);
-    reasons.push(`It feels like ${formatTemp(feelsLike)}.`);
-
-    if (coldWind || feelsLike <= 40 || low <= 38) {
-      addAction(actions, "Gloves", "Wear gloves", 120);
-      addAction(actions, "Beanie", "Wear a beanie", 115);
-    }
-
-    if (feelsLike <= 36 || low <= 34) {
-      addAction(actions, "Scarf", "Wear a scarf", 110);
-    }
-  } else if (rainRisk && feelsLike <= 72) {
-    addAction(actions, "Light jacket", "Wear a light jacket", 90);
-    reasons.push(getRainReason(precipProbability, durationHours));
-  } else if (cool) {
-    addAction(actions, "Light jacket", "Wear a light jacket", 90);
-    reasons.push(`It feels like ${formatTemp(feelsLike)}.`);
-  } else if (sweatshirtWeather && !rainRisk) {
-    addAction(actions, "Sweatshirt", "Wear a sweatshirt", 80);
-    reasons.push(`It feels like ${formatTemp(feelsLike)}.`);
-  } else if (hot) {
-    addAction(actions, "Light clothing", "Wear light clothing", 70);
-    reasons.push(`The high is ${formatTemp(high)}.`);
-  }
-
-  if (rainRisk && !snowRisk) {
-    addAction(actions, "Umbrella", "Bring an umbrella", 125);
+  if (winterPrecipRisk) {
+    reasons.push(snowRisk ? "Snow is likely in your window." : "Freezing precipitation is possible.");
+  } else if (rainProfile.umbrellaRisk) {
     reasons.push(getRainReason(precipProbability, durationHours));
   }
 
-  if (waterproofShoesRisk) {
-    addAction(actions, "Rain boots or waterproof shoes", "Wear rain boots or waterproof shoes", 105);
-  }
-
-  if (cold && !veryCold && !rainRisk && !snowRisk && (feelsLike <= 42 || low <= 40)) {
-    addAction(actions, "Sweatpants", "Wear sweatpants", 75);
+  if (veryCold) {
+    reasons.push(`It feels like ${formatTemp(minFeels)} at the coldest point.`);
+  } else if (cool && !rainProfile.umbrellaRisk) {
+    reasons.push(`It may feel as cool as ${formatTemp(minFeels)}.`);
   }
 
   if (windy) {
-    addAction(actions, "Wind-resistant layer", "Wear a wind-resistant layer", 95);
     reasons.push(`Wind may reach ${Math.round(wind)} mph.`);
   }
 
-  if (shouldRecommendSunProtection(windowWeather, { hot, high, currentTemp, rainRisk, snowRisk })) {
-    addAction(actions, "Sunglasses or hat", "Bring sunglasses or a hat", 65);
-  }
-
-  const uniqueActions = removeLayerConflicts(dedupeActions(actions)).sort((a, b) => b.priority - a.priority);
-
-  if (uniqueActions.length === 0) {
-    return {
-      title: "No extra layer needed",
-      reason: `It feels like ${formatTemp(feelsLike)}, with a high of ${formatTemp(high)}.`,
-      checklistTitle: READY_CHECKLIST_TITLE,
-      items: []
-    };
-  }
-
   return {
-    title: combineActionLabels(uniqueActions.slice(0, 2)),
-    reason: combineReasons(reasons, durationHours),
-    checklistTitle: READY_CHECKLIST_TITLE,
-    items: uniqueActions.slice(0, MAX_CHECKLIST_ITEMS).map((action) => action.item)
+    durationHours,
+    feelsLike,
+    currentTemp,
+    high: Math.max(high, maxTemp),
+    low: Math.min(low, minTemp),
+    maxTemp,
+    minTemp,
+    maxFeels,
+    minFeels,
+    wind,
+    precipProbability,
+    rainProfile,
+    rainRisk: rainProfile.umbrellaRisk,
+    snowRisk,
+    freezingPrecipRisk,
+    winterPrecipRisk,
+    veryCold,
+    cold,
+    cool,
+    coldWind,
+    windy,
+    daylightSunny,
+    hot,
+    cloudy,
+    temperatureRange,
+    sunProtection,
+    reasons
   };
+}
+
+function getEligibleTopOptions(features) {
+  const options = [];
+  const dryEnoughForLightTops = !features.rainRisk && !features.winterPrecipRisk;
+  const coldWetOrWindy = features.rainRisk || features.windy || features.cloudy;
+  const mildRange = features.maxFeels >= 55 && features.minFeels <= 72;
+
+  if (features.winterPrecipRisk || features.minFeels <= 35) {
+    addOption(options, "Thermal Layer", 120);
+    addOption(options, "Heavy Coat", 116);
+    return options;
+  }
+
+  if (features.maxFeels >= 78 && dryEnoughForLightTops && !features.coldWind) {
+    addOption(options, "Tank Top", 86 + Math.min(features.maxFeels - 78, 8));
+  }
+
+  if (features.maxFeels >= 62 && features.minFeels >= 54 && !features.coldWind && !features.winterPrecipRisk) {
+    const score = features.maxFeels >= 68 ? 98 : 88;
+
+    addOption(options, "T-shirt", score);
+  }
+
+  if (features.maxFeels >= 60 && features.minFeels >= 52 && !features.winterPrecipRisk) {
+    addOption(options, "Polo Shirt", features.maxFeels >= 68 ? 94 : 86);
+  }
+
+  if (mildRange || features.cloudy || features.windy || features.temperatureRange >= 10) {
+    addOption(options, "Light Long-Sleeve", coldWetOrWindy ? 98 : 82);
+  }
+
+  if (features.maxFeels >= 58 && features.maxFeels <= 78 && features.minFeels >= 52 && !features.winterPrecipRisk) {
+    addOption(options, "Button-Up Shirt", features.temperatureRange >= 10 || features.cloudy ? 76 : 72);
+  }
+
+  if (features.minFeels <= 62 || (features.maxFeels <= 66 && (features.cloudy || features.windy))) {
+    addOption(options, "Sweater", features.minFeels <= 58 || coldWetOrWindy ? 94 : 80);
+    addOption(options, "Hoodie", features.minFeels <= 55 || features.windy ? 90 : 78);
+  }
+
+  if (features.minFeels <= 60 || features.low <= 58 || (features.rainRisk && features.maxFeels <= 72) || features.coldWind) {
+    addOption(options, "Light Jacket", features.rainRisk || features.windy || features.minFeels <= 52 ? 92 : 84);
+  }
+
+  if (features.minFeels <= 38 || features.low <= 38 || (features.minFeels <= 42 && (features.coldWind || features.rainRisk))) {
+    addOption(options, "Heavy Coat", 104);
+  }
+
+  return options;
+}
+
+function getEligibleBottomOptions(features) {
+  const options = [];
+  const dryWarmEnough = !features.winterPrecipRisk && !features.rainRisk;
+  const shortsBridgeWeather = features.maxFeels >= 65
+    && features.maxFeels <= 72
+    && features.sunProtection
+    && !features.windy
+    && dryWarmEnough
+    && features.minFeels >= 58;
+
+  if (features.winterPrecipRisk || features.minFeels <= 35) {
+    addOption(options, "Thermal Pants", 120);
+    addOption(options, "Sweatpants", 112);
+    return options;
+  }
+
+  if ((features.maxFeels >= 70 && dryWarmEnough && features.minFeels >= 60) || shortsBridgeWeather) {
+    addOption(options, "Shorts", features.maxFeels >= 75 ? 98 : 92);
+  }
+
+  if (features.maxFeels >= 72 && dryWarmEnough && features.minFeels >= 60) {
+    addOption(options, "Skirt", features.maxFeels >= 78 ? 94 : 86);
+  }
+
+  if (features.maxFeels >= 55 && features.maxFeels <= 80 && features.minFeels >= 45 && !features.winterPrecipRisk) {
+    addOption(options, "Cargo Pants", features.maxFeels >= 64 ? 90 : 88);
+  }
+
+  if (features.maxFeels >= 45 && features.maxFeels <= 74 && !features.winterPrecipRisk) {
+    addOption(options, "Jeans", features.maxFeels >= 55 ? 88 : 84);
+    addOption(options, "Pants", features.maxFeels <= 52 ? 96 : 86);
+  }
+
+  if (features.minFeels <= 62 || (features.cloudy && features.maxFeels <= 66)) {
+    addOption(options, "Joggers", features.minFeels <= 52 ? 92 : 78);
+  }
+
+  if (features.minFeels <= 55 || features.coldWind) {
+    addOption(options, "Sweatpants", features.minFeels <= 45 || features.coldWind ? 88 : 82);
+  }
+
+  if (features.minFeels <= 38 || features.low <= 38) {
+    addOption(options, "Thermal Pants", 104);
+  }
+
+  return options;
+}
+
+function getAccessoryActions(features) {
+  const accessories = [];
+
+  if (features.rainRisk && !features.winterPrecipRisk) {
+    accessories.push({ item: "Umbrella / Rain Jacket", priority: 80 });
+  }
+
+  if (features.sunProtection) {
+    accessories.push({ item: "Sunglasses / Hat", priority: 70 });
+  }
+
+  if (features.minFeels <= 40 || (features.windy && features.minFeels <= 45)) {
+    accessories.push({ item: "Beanie", priority: 66 });
+  }
+
+  if (features.minFeels <= 38 || (features.windy && features.minFeels <= 42)) {
+    accessories.push({ item: "Gloves", priority: 65 });
+  }
+
+  if (features.minFeels <= 36 || (features.coldWind && features.minFeels <= 40)) {
+    accessories.push({ item: "Scarf", priority: 64 });
+  }
+
+  if (features.winterPrecipRisk) {
+    accessories.push({ item: "Winter shoes / Snow boots", priority: 63 });
+  }
+
+  return accessories.sort((a, b) => b.priority - a.priority);
+}
+
+function selectClothingOptions(candidates, fallbackOptions, features) {
+  const ranked = dedupeOptions([...candidates, ...fallbackOptions])
+    .sort((a, b) => b.score - a.score);
+  const preferredCount = features.winterPrecipRisk || features.minFeels <= 35 ? 2 : 3;
+
+  return ranked.slice(0, Math.min(preferredCount, ranked.length)).map((option) => option.item);
+}
+
+function getFallbackTopOptions(features) {
+  if (features.winterPrecipRisk || features.minFeels <= 35) {
+    return [
+      { item: "Thermal Layer", score: 80 },
+      { item: "Heavy Coat", score: 78 }
+    ];
+  }
+
+  if (features.maxFeels >= 75) {
+    return [
+      { item: "T-shirt", score: 70 },
+      { item: "Polo Shirt", score: 68 }
+    ];
+  }
+
+  if (features.maxFeels >= 60) {
+    return [
+      { item: "T-shirt", score: 70 },
+      { item: "Polo Shirt", score: 68 },
+      { item: "Light Long-Sleeve", score: 66 }
+    ];
+  }
+
+  if (features.maxFeels >= 48) {
+    return [
+      { item: "Light Long-Sleeve", score: 70 },
+      { item: "Sweater", score: 68 },
+      { item: "Light Jacket", score: 66 }
+    ];
+  }
+
+  return [
+    { item: "Sweater", score: 70 },
+    { item: "Hoodie", score: 68 },
+    { item: "Light Jacket", score: 66 }
+  ];
+}
+
+function getFallbackBottomOptions(features) {
+  if (features.winterPrecipRisk || features.minFeels <= 35) {
+    return [
+      { item: "Thermal Pants", score: 80 },
+      { item: "Sweatpants", score: 78 }
+    ];
+  }
+
+  if (features.maxFeels >= 72 && !features.rainRisk) {
+    return [
+      { item: "Shorts", score: 70 },
+      { item: "Cargo Pants", score: 68 },
+      { item: "Jeans", score: 66 }
+    ];
+  }
+
+  if (features.maxFeels >= 55) {
+    return [
+      { item: "Cargo Pants", score: 70 },
+      { item: "Jeans", score: 68 },
+      { item: "Pants", score: 66 }
+    ];
+  }
+
+  return [
+    { item: "Pants", score: 70 },
+    { item: "Joggers", score: 68 },
+    { item: "Sweatpants", score: 66 }
+  ];
+}
+
+function addOption(options, item, score) {
+  options.push({ item, score });
+}
+
+function dedupeOptions(options) {
+  const bestOptions = new Map();
+
+  options.forEach((option) => {
+    const current = bestOptions.get(option.item);
+
+    if (!current || option.score > current.score) {
+      bestOptions.set(option.item, option);
+    }
+  });
+
+  return [...bestOptions.values()];
+}
+
+function formatOptionGroup(options) {
+  return options.join(" / ");
 }
 
 // Rain uses a window-level profile so an umbrella can be recommended before
@@ -224,7 +455,7 @@ function getRainProfile(weather, durationHours) {
   const wetHours = hours.filter((hour) => isRainyHour(hour, probabilityThreshold));
   const hasRainCode = hasCode(RAIN_CODES, weather.current.weatherCode, weather.daily.weatherCode)
     || hours.some((hour) => hasCode(RAIN_CODES, hour.weatherCode));
-  const heavyRain = maxPrecipitation >= WATERPROOF_RAIN_INCHES
+  const heavyRain = maxPrecipitation >= HEAVY_RAIN_INCHES
     || hasCode(HEAVY_RAIN_CODES, weather.current.weatherCode, weather.daily.weatherCode)
     || hours.some((hour) => hasCode(HEAVY_RAIN_CODES, hour.weatherCode));
   const sustainedRain = wetHours.length >= SUSTAINED_RAIN_HOURS
@@ -358,55 +589,20 @@ function hasCode(codeSet, ...codes) {
   return codes.some((code) => codeSet.has(Number(code)));
 }
 
-// Action helpers handle priority, duplicate removal, and clothing layer
-// conflicts after all weather rules have had a chance to add suggestions.
-function addAction(actions, item, label, priority) {
-  actions.push({ item, label, priority });
+function isCloudyHour(hour) {
+  return isCloudyCode(hour.weatherCode);
 }
 
-function dedupeActions(actions) {
-  const bestActions = new Map();
+function isCloudyCode(code) {
+  const normalizedCode = Number(code);
 
-  actions.forEach((action) => {
-    const current = bestActions.get(action.item);
-
-    if (!current || action.priority > current.priority) {
-      bestActions.set(action.item, action);
-    }
-  });
-
-  return [...bestActions.values()];
-}
-
-function removeLayerConflicts(actions) {
-  const items = new Set(actions.map((action) => action.item));
-
-  return actions.filter((action) => {
-    if (items.has("Heavy coat") && ["Light jacket", "Sweatshirt", "Light clothing"].includes(action.item)) {
-      return false;
-    }
-
-    if (items.has("Light jacket") && ["Sweatshirt", "Light clothing"].includes(action.item)) {
-      return false;
-    }
-
-    if (items.has("Sweatshirt") && action.item === "Light clothing") {
-      return false;
-    }
-
-    return true;
-  });
+  return Number.isFinite(normalizedCode)
+    && !SUNNY_CODES.has(normalizedCode)
+    && !RAIN_CODES.has(normalizedCode)
+    && !SNOW_CODES.has(normalizedCode);
 }
 
 // Copy helpers keep the checklist title, reason, and rain explanation concise.
-function combineActionLabels(actions) {
-  if (actions.length === 1) {
-    return actions[0].label;
-  }
-
-  return `${actions[0].label} and ${lowerFirst(actions[1].label)}`;
-}
-
 function combineReasons(reasons, durationHours) {
   const uniqueReasons = [...new Set(reasons)];
 
@@ -423,10 +619,6 @@ function getRainReason(precipProbability, durationHours) {
   }
 
   return `Rain is in the next ${durationHours}-hour forecast.`;
-}
-
-function lowerFirst(text) {
-  return text.charAt(0).toLowerCase() + text.slice(1);
 }
 
 function normalizeForecastWindowHours(value) {

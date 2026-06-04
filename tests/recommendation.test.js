@@ -6,10 +6,35 @@ import {
 } from "../src/recommendation.js";
 
 const NOW = new Date("2026-05-20T08:00:00-04:00");
-const UMBRELLA = "Umbrella";
-const WATERPROOF_SHOES = "Rain boots or waterproof shoes";
-const LIGHT_JACKET = "Light jacket";
-const HEAVY_COAT = "Heavy coat";
+const TOP_OPTIONS = [
+  "Tank Top",
+  "T-shirt",
+  "Polo Shirt",
+  "Light Long-Sleeve",
+  "Button-Up Shirt",
+  "Sweater",
+  "Hoodie",
+  "Light Jacket",
+  "Heavy Coat",
+  "Thermal Layer"
+];
+const BOTTOM_OPTIONS = [
+  "Shorts",
+  "Skirt",
+  "Cargo Pants",
+  "Jeans",
+  "Pants",
+  "Joggers",
+  "Sweatpants",
+  "Thermal Pants"
+];
+const REMOVED_PHRASES = [
+  "Sunglasses or hat",
+  "Waterproof Layer",
+  "Water-resistant pants",
+  "Wind-resistant Layer",
+  "Rain boots or waterproof shoes"
+];
 
 function recommendationItems(weather, durationHours) {
   const forecastWindow = getNextForecastWindow(weather, NOW, durationHours);
@@ -23,6 +48,8 @@ function makeWeather({
   feelsLike = temperature,
   high = Math.max(temperature, 75),
   low = Math.min(temperature, 65),
+  weatherCode = 2,
+  windSpeed = 5,
   hourlyOverrides = []
 } = {}) {
   const hourly = Array.from({ length: 14 }, (_, offset) => ({
@@ -34,8 +61,8 @@ function makeWeather({
     rain: 0,
     showers: 0,
     snowfall: 0,
-    weatherCode: 2,
-    windSpeed: 5
+    weatherCode,
+    windSpeed
   }));
 
   hourlyOverrides.forEach(({ offset, ...override }) => {
@@ -51,16 +78,16 @@ function makeWeather({
       rain: 0,
       showers: 0,
       snowfall: 0,
-      weatherCode: 2,
-      windSpeed: 5
+      weatherCode,
+      windSpeed
     },
     daily: {
       date: "2026-05-20",
-      weatherCode: 2,
+      weatherCode,
       high,
       low,
       precipitationProbability: 0,
-      windMax: 5
+      windMax: windSpeed
     },
     hourly
   };
@@ -80,6 +107,27 @@ function rainAt(offset, {
   };
 }
 
+function snowAt(offset, {
+  probability = 70,
+  snowfall = 0.2,
+  weatherCode = 71
+} = {}) {
+  return {
+    offset,
+    precipitationProbability: probability,
+    snowfall,
+    weatherCode
+  };
+}
+
+function warmHour(offset, temperature) {
+  return {
+    offset,
+    temperature,
+    feelsLike: temperature
+  };
+}
+
 function addHours(date, hours) {
   const copy = new Date(date);
 
@@ -95,88 +143,138 @@ function assertExcludes(items, item, message) {
   assert.equal(items.includes(item), false, message);
 }
 
-function assertNoRainGear(items, message) {
-  [UMBRELLA, WATERPROOF_SHOES].forEach((item) => {
-    assertExcludes(items, item, message);
+function assertHasTopAndBottom(items, message) {
+  assert.equal(items.some((item) => hasAnyOption(item, TOP_OPTIONS)), true, `${message} should include a top item.`);
+  assert.equal(items.some((item) => hasAnyOption(item, BOTTOM_OPTIONS)), true, `${message} should include a bottom item.`);
+}
+
+function assertLabelFree(items) {
+  items.forEach((item) => {
+    assert.equal(item.startsWith("Top:"), false, `${item} should not include a top label.`);
+    assert.equal(item.startsWith("Bottom:"), false, `${item} should not include a bottom label.`);
   });
+}
+
+function assertRemovedPhrasesAbsent(items) {
+  REMOVED_PHRASES.forEach((phrase) => {
+    assertExcludes(items, phrase, `${phrase} should not be emitted.`);
+  });
+}
+
+function assertNoOption(items, option, message) {
+  assert.equal(items.some((item) => optionGroup(item).includes(option)), false, message);
+}
+
+function hasAnyOption(item, options) {
+  const group = optionGroup(item);
+
+  return options.some((option) => group.includes(option));
+}
+
+function optionGroup(item) {
+  return item.split(" / ").map((option) => option.trim());
+}
+
+{
+  const items = recommendationItems(makeWeather({
+    temperature: 84,
+    feelsLike: 84,
+    high: 90,
+    low: 78,
+    weatherCode: 0
+  }), 6);
+
+  assertIncludes(items, "T-shirt / Polo Shirt / Tank Top", "Hot sunny dry day should include flexible warm tops.");
+  assertIncludes(items, "Shorts / Skirt / Cargo Pants", "Hot sunny dry day should include flexible warm bottoms.");
+  assertIncludes(items, "Sunglasses / Hat", "Hot sunny dry day should include sun protection.");
+  assertHasTopAndBottom(items, "Hot sunny dry day");
+}
+
+{
+  const items = recommendationItems(makeWeather({
+    temperature: 64,
+    feelsLike: 64,
+    high: 72,
+    low: 58,
+    weatherCode: 1,
+    hourlyOverrides: [warmHour(4, 70)]
+  }), 6);
+
+  assertIncludes(items, "T-shirt / Polo Shirt / Light Long-Sleeve", "Mild sunny day should include flexible mild tops.");
+  assertIncludes(items, "Shorts / Cargo Pants / Jeans", "Mild sunny day should bridge shorts and pants.");
+}
+
+{
+  const items = recommendationItems(makeWeather({
+    temperature: 60,
+    feelsLike: 60,
+    high: 64,
+    low: 56,
+    weatherCode: 3,
+    windSpeed: 25
+  }), 6);
+
+  assertIncludes(items, "Light Long-Sleeve / Sweater / Light Jacket", "Cloudy windy 60s should bias toward layers.");
+  assertIncludes(items, "Cargo Pants / Jeans / Pants", "Cloudy windy 60s should bias away from shorts.");
+  assertNoOption(items, "Shorts", "Cloudy windy 60s should not suggest shorts.");
+}
+
+{
+  const items = recommendationItems(makeWeather({
+    temperature: 55,
+    feelsLike: 55,
+    high: 59,
+    low: 51,
+    hourlyOverrides: [rainAt(2, { probability: 70, precipitation: 0.04, weatherCode: 61 })]
+  }), 6);
+
+  assertIncludes(items, "Light Long-Sleeve / Sweater / Light Jacket", "Cool rain should include normal layer options.");
+  assertIncludes(items, "Cargo Pants / Jeans / Pants", "Cool rain should include normal bottom options.");
+  assertIncludes(items, "Umbrella / Rain Jacket", "Rain should use umbrella/rain jacket copy.");
+  assertRemovedPhrasesAbsent(items);
+}
+
+{
+  const items = recommendationItems(makeWeather({
+    temperature: 30,
+    feelsLike: 25,
+    high: 32,
+    low: 24,
+    weatherCode: 71,
+    windSpeed: 18,
+    hourlyOverrides: [snowAt(1)]
+  }), 6);
+
+  assertIncludes(items, "Thermal Layer / Heavy Coat", "Snow/freezing should include serious upper-body layers.");
+  assertIncludes(items, "Thermal Pants / Sweatpants", "Snow/freezing should include serious bottom layers.");
+  assertIncludes(items, "Winter shoes / Snow boots", "Snow/freezing should include winter footwear.");
+  assertNoOption(items, "Shorts", "Snow/freezing should not suggest shorts.");
+  assertNoOption(items, "Tank Top", "Snow/freezing should not suggest tank tops.");
+  assertNoOption(items, "Sandals", "Snow/freezing should not suggest sandals.");
 }
 
 {
   const weather = makeWeather({ hourlyOverrides: [rainAt(8)] });
 
-  assertExcludes(recommendationItems(weather, 3), UMBRELLA, "3h window should ignore rain starting 8 hours later.");
-  assertExcludes(recommendationItems(weather, 6), UMBRELLA, "6h window should ignore rain starting 8 hours later.");
-  assertIncludes(recommendationItems(weather, 9), UMBRELLA, "9h window should catch rain starting 8 hours later.");
-  assertIncludes(recommendationItems(weather, 12), UMBRELLA, "12h window should catch rain starting 8 hours later.");
+  assertExcludes(recommendationItems(weather, 3), "Umbrella / Rain Jacket", "3h window should ignore rain starting 8 hours later.");
+  assertExcludes(recommendationItems(weather, 6), "Umbrella / Rain Jacket", "6h window should ignore rain starting 8 hours later.");
+  assertIncludes(recommendationItems(weather, 9), "Umbrella / Rain Jacket", "9h window should catch rain starting 8 hours later.");
+  assertIncludes(recommendationItems(weather, 12), "Umbrella / Rain Jacket", "12h window should catch rain starting 8 hours later.");
 }
 
 {
-  const thirtyPercentLater = makeWeather({
-    hourlyOverrides: [rainAt(8, { probability: 30, precipitation: 0, weatherCode: 2 })]
+  [
+    makeWeather(),
+    makeWeather({ temperature: 48, feelsLike: 45, high: 50, low: 42 }),
+    makeWeather({ temperature: 82, feelsLike: 82, high: 86, low: 75 }),
+    makeWeather({ temperature: 36, feelsLike: 32, high: 38, low: 30 })
+  ].forEach((weather, index) => {
+    const items = recommendationItems(weather, 6);
+
+    assertHasTopAndBottom(items, `Normal forecast ${index + 1}`);
+    assertLabelFree(items);
+    assertRemovedPhrasesAbsent(items);
   });
-  const thirtyFivePercentLater = makeWeather({
-    hourlyOverrides: [rainAt(8, { probability: 35, precipitation: 0, weatherCode: 2 })]
-  });
-
-  assertNoRainGear(recommendationItems(thirtyPercentLater, 12), "30% future chance alone should not add rain gear.");
-  assertNoRainGear(recommendationItems(thirtyFivePercentLater, 6), "35% future chance should not add rain gear for shorter windows.");
-  assertIncludes(recommendationItems(thirtyFivePercentLater, 9), UMBRELLA, "35% future chance should add umbrella for longer windows.");
-}
-
-{
-  const weather = makeWeather({
-    hourlyOverrides: [rainAt(8, { probability: 85, precipitation: 0.08, weatherCode: 65 })]
-  });
-  const items = recommendationItems(weather, 12);
-
-  assertIncludes(items, UMBRELLA, "Heavy rain later should add umbrella.");
-  assertIncludes(items, WATERPROOF_SHOES, "Heavy rain later should add waterproof shoes.");
-}
-
-{
-  const weather = makeWeather({
-    hourlyOverrides: [rainAt(8, { probability: 45, precipitation: 0.01, weatherCode: 51 })]
-  });
-  const items = recommendationItems(weather, 12);
-
-  assertIncludes(items, UMBRELLA, "Light drizzle later may still justify an umbrella.");
-  assertExcludes(items, WATERPROOF_SHOES, "Light drizzle alone should not add waterproof shoes.");
-}
-
-{
-  const weather = makeWeather({
-    temperature: 42,
-    feelsLike: 40,
-    high: 45,
-    low: 39,
-    hourlyOverrides: [rainAt(2, { probability: 70, precipitation: 0.04, weatherCode: 61 })]
-  });
-  const items = recommendationItems(weather, 6);
-
-  assertIncludes(items, HEAVY_COAT, "Cold rain should keep a warm layer.");
-  assertIncludes(items, UMBRELLA, "Cold rain should add umbrella.");
-  assertIncludes(items, WATERPROOF_SHOES, "Cold meaningful rain should add waterproof shoes.");
-}
-
-{
-  const weather = makeWeather({
-    temperature: 82,
-    feelsLike: 82,
-    high: 86,
-    low: 75,
-    hourlyOverrides: [rainAt(2, { probability: 70, precipitation: 0.04, weatherCode: 61 })]
-  });
-  const items = recommendationItems(weather, 6);
-
-  assertIncludes(items, UMBRELLA, "Warm rain should add umbrella.");
-  assertExcludes(items, HEAVY_COAT, "Warm rain should not add a heavy coat.");
-  assertExcludes(items, LIGHT_JACKET, "Warm rain should not add a cool-weather jacket.");
-}
-
-{
-  const items = recommendationItems(makeWeather(), 12);
-
-  assertNoRainGear(items, "No rain should not add rain gear.");
 }
 
 console.log("Recommendation examples passed.");

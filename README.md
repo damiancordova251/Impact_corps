@@ -431,13 +431,15 @@ The Ready Checklist uses the user's expected time away from home as its forecast
 
 Ready errs on the side of practical preparedness for the time you expect to be away from home. A 9 PM check with a 3-hour window should only consider the next few nighttime hours. A 9 PM check with a 12-hour window may include daylight or later rain if the user expects to be away long enough.
 
+Recommendation logic always builds a label-free clothing foundation first: one flexible top item and one flexible bottom item, usually with 2-3 slash-separated options. Accessories such as rain gear, sun protection, cold accessories, and winter footwear are added only when relevant.
+
 Rain handling is window-aware:
 
-- Umbrella is recommended when meaningful rain risk appears inside the selected window.
-- For `3` and `6` hour windows, rain chance of `40%` or higher can trigger umbrella.
-- For `9` and `12` hour windows, rain chance of `35%` or higher can trigger umbrella because there is more time for the user to get caught away from home.
-- Measurable rain or rain forecast codes inside the window can also trigger umbrella.
-- Rain boots or waterproof shoes are stricter: snow, heavy rain, sustained rain, or cold meaningful rain can trigger them, but tiny drizzle alone should not.
+- `Umbrella / Rain Jacket` is recommended when meaningful rain risk appears inside the selected window.
+- For `3` and `6` hour windows, rain chance of `40%` or higher can trigger rain gear.
+- For `9` and `12` hour windows, rain chance of `35%` or higher can trigger rain gear because there is more time for the user to get caught away from home.
+- Measurable rain or rain forecast codes inside the window can also trigger rain gear.
+- Winter footwear is reserved for snow, freezing rain, ice risk, or near-freezing precipitation.
 
 ## Expected Time Away Test
 
@@ -465,14 +467,14 @@ npm run test:recommendations
 
 The examples cover:
 
+- Hot sunny dry weather gives flexible top and bottom options plus `Sunglasses / Hat`.
+- Mild sunny weather can bridge warm and mild options like `Shorts / Cargo Pants / Jeans`.
+- Mild cloudy/windy weather biases toward long sleeves, light layers, and pants.
 - Rain starts 8 hours from now: umbrella appears for `9`/`12` hour windows, not `3`/`6`.
-- `30%` future rain chance alone does not add rain gear.
-- `35%` future rain chance can add umbrella for longer windows, not shorter ones.
-- Heavy rain later adds umbrella and waterproof shoes.
-- Light drizzle later can add umbrella but not waterproof shoes.
-- Cold rain adds a warm layer, umbrella, and waterproof shoes when justified.
-- Warm rain adds umbrella without a heavy layer.
-- No rain adds no rain gear.
+- Rain produces `Umbrella / Rain Jacket`, not waterproof or water-resistant clothing.
+- Snow/freezing weather avoids shorts, tank tops, and sandals.
+- Snow/freezing weather can add `Winter shoes / Snow boots`.
+- Every normal forecast includes at least one top item and one bottom item without category labels.
 
 ## Testing Push
 
