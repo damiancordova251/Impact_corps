@@ -492,22 +492,14 @@ function isRainyHour(hour, probabilityThreshold) {
     || hasCode(RAIN_CODES, hour.weatherCode);
 }
 
-// Sun protection is deliberately tied to daylight and sunny hours inside the
-// selected checklist window, not the full day.
+// Sun protection is deliberately tied to bright daylight inside the selected
+// checklist window, not warm temperatures or the full day.
 function shouldRecommendSunProtection(weather, conditions) {
   const daylightHours = getDaylightHours(weather.checklistWindow?.usableHours ?? []);
-  const daylightWarmEnough = daylightHours.some((hour) => {
-    const temperature = bestNumber(hour.feelsLike, hour.temperature);
-
-    return temperature >= 70;
-  });
   const daylightSunny = daylightHours.some((hour) => hasCode(SUNNY_CODES, hour.weatherCode));
-  const warmEnough = conditions.hot || conditions.high >= 75 || conditions.currentTemp >= 70 || daylightWarmEnough;
 
   return daylightHours.length > 0
     && daylightSunny
-    && warmEnough
-    && !conditions.rainRisk
     && !conditions.snowRisk;
 }
 

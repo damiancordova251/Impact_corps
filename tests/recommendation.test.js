@@ -36,14 +36,15 @@ const REMOVED_PHRASES = [
   "Rain boots or waterproof shoes"
 ];
 
-function recommendationItems(weather, durationHours) {
-  const forecastWindow = getNextForecastWindow(weather, NOW, durationHours);
+function recommendationItems(weather, durationHours, now = NOW) {
+  const forecastWindow = getNextForecastWindow(weather, now, durationHours);
   const windowWeather = buildWindowWeather(weather, forecastWindow);
 
   return createRecommendation(windowWeather).items;
 }
 
 function makeWeather({
+  now = NOW,
   temperature = 72,
   feelsLike = temperature,
   high = Math.max(temperature, 75),
@@ -53,7 +54,7 @@ function makeWeather({
   hourlyOverrides = []
 } = {}) {
   const hourly = Array.from({ length: 14 }, (_, offset) => ({
-    time: addHours(NOW, offset).toISOString(),
+    time: addHours(now, offset).toISOString(),
     temperature,
     feelsLike,
     precipitationProbability: 0,
@@ -71,7 +72,7 @@ function makeWeather({
 
   return {
     current: {
-      time: NOW.toISOString(),
+      time: now.toISOString(),
       temperature,
       feelsLike,
       precipitation: 0,
@@ -202,6 +203,7 @@ function optionGroup(item) {
 
   assertIncludes(items, "T-shirt / Polo Shirt / Light Long-Sleeve", "Mild sunny day should include flexible mild tops.");
   assertIncludes(items, "Shorts / Cargo Pants / Jeans", "Mild sunny day should bridge shorts and pants.");
+  assertIncludes(items, "Sunglasses / Hat", "Mild sunny daytime forecast should include sun protection.");
 }
 
 {
@@ -225,12 +227,14 @@ function optionGroup(item) {
     feelsLike: 55,
     high: 59,
     low: 51,
+    weatherCode: 3,
     hourlyOverrides: [rainAt(2, { probability: 70, precipitation: 0.04, weatherCode: 61 })]
   }), 6);
 
   assertIncludes(items, "Light Long-Sleeve / Sweater / Light Jacket", "Cool rain should include normal layer options.");
   assertIncludes(items, "Cargo Pants / Jeans / Pants", "Cool rain should include normal bottom options.");
   assertIncludes(items, "Umbrella / Rain Jacket", "Rain should use umbrella/rain jacket copy.");
+  assertExcludes(items, "Sunglasses / Hat", "Rainy/cloudy-only forecast should not include sun protection.");
   assertRemovedPhrasesAbsent(items);
 }
 
@@ -260,6 +264,20 @@ function optionGroup(item) {
   assertExcludes(recommendationItems(weather, 6), "Umbrella / Rain Jacket", "6h window should ignore rain starting 8 hours later.");
   assertIncludes(recommendationItems(weather, 9), "Umbrella / Rain Jacket", "9h window should catch rain starting 8 hours later.");
   assertIncludes(recommendationItems(weather, 12), "Umbrella / Rain Jacket", "12h window should catch rain starting 8 hours later.");
+}
+
+{
+  const nightNow = new Date("2026-05-20T21:00:00-04:00");
+  const items = recommendationItems(makeWeather({
+    now: nightNow,
+    temperature: 78,
+    feelsLike: 78,
+    high: 82,
+    low: 74,
+    weatherCode: 0
+  }), 3, nightNow);
+
+  assertExcludes(items, "Sunglasses / Hat", "Night-only forecast should not include sun protection.");
 }
 
 {
