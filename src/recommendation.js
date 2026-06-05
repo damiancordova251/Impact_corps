@@ -26,6 +26,29 @@ const SWEATSHIRT_TEMP = 66;
 const WINDY_MPH = 24;
 const COLD_WIND_MPH = 18;
 const HOT_TEMP = 86;
+const CLOTHING_WEIGHT_LABELS = ["", "Light", "Light-Medium", "Medium", "Medium-Heavy", "Heavy"];
+const TOP_CLOTHING_WEIGHTS = new Map([
+  ["Tank Top", 1],
+  ["T-shirt", 1],
+  ["Polo Shirt", 1],
+  ["Button-Up Shirt", 2],
+  ["Light Long-Sleeve", 2],
+  ["Sweater", 3],
+  ["Hoodie", 3],
+  ["Light Jacket", 4],
+  ["Heavy Coat", 5],
+  ["Thermal Layer", 5]
+]);
+const BOTTOM_CLOTHING_WEIGHTS = new Map([
+  ["Shorts", 1],
+  ["Skirt", 1],
+  ["Cargo Pants", 1],
+  ["Jeans", 2],
+  ["Pants", 3],
+  ["Joggers", 4],
+  ["Sweatpants", 4],
+  ["Thermal Pants", 5]
+]);
 
 // Selects the forecast hours that match how long the user expects to be away
 // from home, falling back to the nearest hour when no hourly data is available.
@@ -98,12 +121,22 @@ export function buildWindowWeather(weather, forecastWindow) {
 // are added for weather-specific needs.
 export function createRecommendation(windowWeather) {
   const features = getWindowFeatures(windowWeather);
-  const topOptions = selectClothingOptions(getEligibleTopOptions(features), getFallbackTopOptions(features), features);
-  const bottomOptions = selectClothingOptions(getEligibleBottomOptions(features), getFallbackBottomOptions(features), features);
+  const topOptions = selectClothingOptions(
+    getEligibleTopOptions(features),
+    getFallbackTopOptions(features),
+    features,
+    TOP_CLOTHING_WEIGHTS
+  );
+  const bottomOptions = selectClothingOptions(
+    getEligibleBottomOptions(features),
+    getFallbackBottomOptions(features),
+    features,
+    BOTTOM_CLOTHING_WEIGHTS
+  );
   const accessories = getAccessoryActions(features);
   const actions = [
-    { item: formatOptionGroup(topOptions), priority: 200 },
-    { item: formatOptionGroup(bottomOptions), priority: 190 },
+    { item: formatClothingGroup("Top", topOptions, TOP_CLOTHING_WEIGHTS), priority: 200 },
+    { item: formatClothingGroup("Bottom", bottomOptions, BOTTOM_CLOTHING_WEIGHTS), priority: 190 },
     ...accessories
   ];
 
@@ -156,6 +189,7 @@ function getWindowFeatures(weather) {
   const cloudy = hours.some(isCloudyHour) || isCloudyCode(currentCode) || isCloudyCode(dailyCode);
   const temperatureRange = Math.max(high, maxTemp) - Math.min(low, minTemp);
   const daylightSunny = daylightHours.some((hour) => hasCode(SUNNY_CODES, hour.weatherCode));
+  const sunProtection = daylightSunny && !rainProfile.umbrellaRisk && !winterPrecipRisk;
   const reasons = [];
 
   if (winterPrecipRisk) {
@@ -200,6 +234,7 @@ function getWindowFeatures(weather) {
     hot,
     cloudy,
     temperatureRange,
+    sunProtection,
     reasons
   };
 }
@@ -309,6 +344,10 @@ function getAccessoryActions(features) {
     accessories.push({ item: "Umbrella / Rain Jacket", priority: 80 });
   }
 
+  if (features.sunProtection) {
+    accessories.push({ item: "Sunglasses / Hat", priority: 70 });
+  }
+
   if (features.minFeels <= 40 || (features.windy && features.minFeels <= 45)) {
     accessories.push({ item: "Beanie", priority: 66 });
   }
@@ -328,12 +367,25 @@ function getAccessoryActions(features) {
   return accessories.sort((a, b) => b.priority - a.priority);
 }
 
-function selectClothingOptions(candidates, fallbackOptions, features) {
+function selectClothingOptions(candidates, fallbackOptions, features, weightMap) {
   const ranked = dedupeOptions([...candidates, ...fallbackOptions])
     .sort((a, b) => b.score - a.score);
   const preferredCount = features.winterPrecipRisk || features.minFeels <= 35 ? 2 : 3;
+  const selected = [];
 
-  return ranked.slice(0, Math.min(preferredCount, ranked.length)).map((option) => option.item);
+  ranked.forEach((option) => {
+    const nextOptions = [...selected.map((selectedOption) => selectedOption.item), option.item];
+
+    if (selected.length < preferredCount && hasReasonableWeightSpread(nextOptions, weightMap)) {
+      selected.push(option);
+    }
+  });
+
+  if (selected.length === 0 && ranked.length > 0) {
+    selected.push(ranked[0]);
+  }
+
+  return selected.map((option) => option.item);
 }
 
 function getFallbackTopOptions(features) {
@@ -425,6 +477,28 @@ function dedupeOptions(options) {
 
 function formatOptionGroup(options) {
   return options.join(" / ");
+}
+
+function formatClothingGroup(category, options, weightMap) {
+  const weightLabel = getClothingWeightLabel(options, weightMap);
+
+  return `${category} (${weightLabel}): ${formatOptionGroup(options)}`;
+}
+
+function getClothingWeightLabel(options, weightMap) {
+  const maxWeight = Math.max(...options.map((option) => getClothingWeight(option, weightMap)));
+
+  return CLOTHING_WEIGHT_LABELS[maxWeight] ?? "Medium";
+}
+
+function hasReasonableWeightSpread(options, weightMap) {
+  const weights = options.map((option) => getClothingWeight(option, weightMap));
+
+  return Math.max(...weights) - Math.min(...weights) <= 2;
+}
+
+function getClothingWeight(option, weightMap) {
+  return weightMap.get(option) ?? 3;
 }
 
 // Rain uses a window-level profile so an umbrella can be recommended before

@@ -28,8 +28,10 @@ const BOTTOM_OPTIONS = [
   "Sweatpants",
   "Thermal Pants"
 ];
+const CLOTHING_WEIGHT_PATTERN = "(Light|Light-Medium|Medium|Medium-Heavy|Heavy)";
+const TOP_LABEL_PATTERN = new RegExp(`^Top \\(${CLOTHING_WEIGHT_PATTERN}\\): `);
+const BOTTOM_LABEL_PATTERN = new RegExp(`^Bottom \\(${CLOTHING_WEIGHT_PATTERN}\\): `);
 const REMOVED_PHRASES = [
-  "Sunglasses / Hat",
   "Sunglasses or hat",
   "Waterproof Layer",
   "Water-resistant pants",
@@ -146,15 +148,33 @@ function assertExcludes(items, item, message) {
 }
 
 function assertHasTopAndBottom(items, message) {
-  assert.equal(items.some((item) => hasAnyOption(item, TOP_OPTIONS)), true, `${message} should include a top item.`);
-  assert.equal(items.some((item) => hasAnyOption(item, BOTTOM_OPTIONS)), true, `${message} should include a bottom item.`);
+  assert.equal(items.some(isTopItem), true, `${message} should include a labelled top item.`);
+  assert.equal(items.some(isBottomItem), true, `${message} should include a labelled bottom item.`);
+  assert.equal(items.some((item) => isTopItem(item) && hasAnyOption(item, TOP_OPTIONS)), true, `${message} should include top options.`);
+  assert.equal(items.some((item) => isBottomItem(item) && hasAnyOption(item, BOTTOM_OPTIONS)), true, `${message} should include bottom options.`);
 }
 
-function assertLabelFree(items) {
+function assertAccessoriesLabelFree(items) {
   items.forEach((item) => {
-    assert.equal(item.startsWith("Top:"), false, `${item} should not include a top label.`);
-    assert.equal(item.startsWith("Bottom:"), false, `${item} should not include a bottom label.`);
+    if (!isTopItem(item) && !isBottomItem(item)) {
+      assert.equal(item.startsWith("Accessory:"), false, `${item} should stay label-free.`);
+      assert.equal(/^[A-Za-z]+ \([^)]+\): /.test(item), false, `${item} should not use clothing label format.`);
+    }
   });
+}
+
+function assertNoWideWeightRanges(items) {
+  items.forEach((item) => {
+    assert.equal(item.includes("(Light-Heavy)"), false, `${item} should not use a Light-Heavy range.`);
+    assert.equal(item.includes("(Light-Medium-Heavy)"), false, `${item} should not use an awkward long range.`);
+  });
+}
+
+function assertClothingWeightIn(items, category, weights, message) {
+  const item = items.find(category === "Top" ? isTopItem : isBottomItem);
+  const acceptedLabels = weights.map((weight) => `${category} (${weight}):`);
+
+  assert.equal(acceptedLabels.some((label) => item?.startsWith(label)), true, message);
 }
 
 function assertRemovedPhrasesAbsent(items) {
@@ -167,6 +187,14 @@ function assertNoOption(items, option, message) {
   assert.equal(items.some((item) => optionGroup(item).includes(option)), false, message);
 }
 
+function isTopItem(item) {
+  return TOP_LABEL_PATTERN.test(item);
+}
+
+function isBottomItem(item) {
+  return BOTTOM_LABEL_PATTERN.test(item);
+}
+
 function hasAnyOption(item, options) {
   const group = optionGroup(item);
 
@@ -174,7 +202,11 @@ function hasAnyOption(item, options) {
 }
 
 function optionGroup(item) {
-  return item.split(" / ").map((option) => option.trim());
+  return stripClothingLabel(item).split(" / ").map((option) => option.trim());
+}
+
+function stripClothingLabel(item) {
+  return item.replace(new RegExp(`^(Top|Bottom) \\(${CLOTHING_WEIGHT_PATTERN}\\): `), "");
 }
 
 {
@@ -186,10 +218,12 @@ function optionGroup(item) {
     weatherCode: 0
   }), 6);
 
-  assertIncludes(items, "T-shirt / Polo Shirt / Tank Top", "Hot sunny dry day should include flexible warm tops.");
-  assertIncludes(items, "Shorts / Skirt / Cargo Pants", "Hot sunny dry day should include flexible warm bottoms.");
-  assertExcludes(items, "Sunglasses / Hat", "Hot sunny dry day should not include sun protection.");
+  assertIncludes(items, "Top (Light): T-shirt / Polo Shirt / Tank Top", "Hot sunny dry day should include labelled light tops.");
+  assertIncludes(items, "Bottom (Light): Shorts / Skirt / Cargo Pants", "Hot sunny dry day should include labelled light bottoms.");
+  assertIncludes(items, "Sunglasses / Hat", "Hot sunny dry day should include sun protection.");
   assertHasTopAndBottom(items, "Hot sunny dry day");
+  assertAccessoriesLabelFree(items);
+  assertNoWideWeightRanges(items);
 }
 
 {
@@ -202,9 +236,11 @@ function optionGroup(item) {
     hourlyOverrides: [warmHour(4, 70)]
   }), 6);
 
-  assertIncludes(items, "T-shirt / Polo Shirt / Light Long-Sleeve", "Mild sunny day should include flexible mild tops.");
-  assertIncludes(items, "Shorts / Cargo Pants / Jeans", "Mild sunny day should bridge shorts and pants.");
-  assertExcludes(items, "Sunglasses / Hat", "Mild sunny daytime forecast should not include sun protection.");
+  assertIncludes(items, "Top (Light-Medium): T-shirt / Polo Shirt / Light Long-Sleeve", "Mild sunny day should include labelled light-medium tops.");
+  assertIncludes(items, "Bottom (Light-Medium): Shorts / Cargo Pants / Jeans", "Mild sunny day should bridge shorts and pants.");
+  assertIncludes(items, "Sunglasses / Hat", "Mild sunny daytime forecast should include sun protection.");
+  assertAccessoriesLabelFree(items);
+  assertNoWideWeightRanges(items);
 }
 
 {
@@ -217,9 +253,10 @@ function optionGroup(item) {
     windSpeed: 25
   }), 6);
 
-  assertIncludes(items, "Light Long-Sleeve / Sweater / Light Jacket", "Cloudy windy 60s should bias toward layers.");
-  assertIncludes(items, "Cargo Pants / Jeans / Pants", "Cloudy windy 60s should bias away from shorts.");
+  assertIncludes(items, "Top (Medium-Heavy): Light Long-Sleeve / Sweater / Light Jacket", "Cloudy windy 60s should bias toward labelled layers.");
+  assertIncludes(items, "Bottom (Medium): Cargo Pants / Jeans / Pants", "Cloudy windy 60s should bias away from shorts.");
   assertNoOption(items, "Shorts", "Cloudy windy 60s should not suggest shorts.");
+  assertNoWideWeightRanges(items);
 }
 
 {
@@ -232,11 +269,29 @@ function optionGroup(item) {
     hourlyOverrides: [rainAt(2, { probability: 70, precipitation: 0.04, weatherCode: 61 })]
   }), 6);
 
-  assertIncludes(items, "Light Long-Sleeve / Sweater / Light Jacket", "Cool rain should include normal layer options.");
-  assertIncludes(items, "Cargo Pants / Jeans / Pants", "Cool rain should include normal bottom options.");
+  assertIncludes(items, "Top (Medium-Heavy): Light Long-Sleeve / Sweater / Light Jacket", "Cool rain should include normal labelled layer options.");
+  assertIncludes(items, "Bottom (Medium): Cargo Pants / Jeans / Pants", "Cool rain should include normal labelled bottom options.");
   assertIncludes(items, "Umbrella / Rain Jacket", "Rain should use umbrella/rain jacket copy.");
   assertExcludes(items, "Sunglasses / Hat", "Rainy/cloudy-only forecast should not include sun protection.");
+  assertAccessoriesLabelFree(items);
   assertRemovedPhrasesAbsent(items);
+  assertNoWideWeightRanges(items);
+}
+
+{
+  const items = recommendationItems(makeWeather({
+    temperature: 42,
+    feelsLike: 38,
+    high: 45,
+    low: 36,
+    weatherCode: 3,
+    windSpeed: 16
+  }), 6);
+
+  assertClothingWeightIn(items, "Top", ["Medium-Heavy", "Heavy"], "Cold forecast should use medium-heavy or heavy top guidance.");
+  assertClothingWeightIn(items, "Bottom", ["Medium-Heavy", "Heavy"], "Cold forecast should use medium-heavy or heavy bottom guidance.");
+  assertHasTopAndBottom(items, "Cold forecast");
+  assertNoWideWeightRanges(items);
 }
 
 {
@@ -250,12 +305,14 @@ function optionGroup(item) {
     hourlyOverrides: [snowAt(1)]
   }), 6);
 
-  assertIncludes(items, "Thermal Layer / Heavy Coat", "Snow/freezing should include serious upper-body layers.");
-  assertIncludes(items, "Thermal Pants / Sweatpants", "Snow/freezing should include serious bottom layers.");
+  assertIncludes(items, "Top (Heavy): Thermal Layer / Heavy Coat", "Snow/freezing should include serious labelled upper-body layers.");
+  assertIncludes(items, "Bottom (Heavy): Thermal Pants / Sweatpants", "Snow/freezing should include serious labelled bottom layers.");
   assertIncludes(items, "Winter shoes / Snow boots", "Snow/freezing should include winter footwear.");
   assertNoOption(items, "Shorts", "Snow/freezing should not suggest shorts.");
   assertNoOption(items, "Tank Top", "Snow/freezing should not suggest tank tops.");
   assertNoOption(items, "Sandals", "Snow/freezing should not suggest sandals.");
+  assertAccessoriesLabelFree(items);
+  assertNoWideWeightRanges(items);
 }
 
 {
@@ -279,6 +336,7 @@ function optionGroup(item) {
   }), 3, nightNow);
 
   assertExcludes(items, "Sunglasses / Hat", "Night-only forecast should not include sun protection.");
+  assertNoWideWeightRanges(items);
 }
 
 {
@@ -291,8 +349,9 @@ function optionGroup(item) {
     const items = recommendationItems(weather, 6);
 
     assertHasTopAndBottom(items, `Normal forecast ${index + 1}`);
-    assertLabelFree(items);
+    assertAccessoriesLabelFree(items);
     assertRemovedPhrasesAbsent(items);
+    assertNoWideWeightRanges(items);
   });
 }
 
