@@ -158,6 +158,22 @@ function assertMaxThreeItems(checklist) {
 
 {
   const recommendation = createRecommendation(buildWindowWeather(
+    makeWeather(),
+    getNextForecastWindow(makeWeather(), NOW, 6)
+  ));
+  const checklist = createPersonalizedChecklist(recommendation, null, {
+    completionStatus: null
+  });
+
+  assert.equal(checklist.personalized, false);
+  assert.equal(checklist.usesDefaultPreferences, true);
+  assertSection(checklist, "Shirts", "Light", ["T-shirt", "Tank top"]);
+  assertSection(checklist, "Pants", "Light-Medium", ["Shorts", "Cargo pants"]);
+  assertClothingLabelsUseWeights(checklist);
+}
+
+{
+  const recommendation = createRecommendation(buildWindowWeather(
     makeWeather({
       temperature: 55,
       feelsLike: 55,

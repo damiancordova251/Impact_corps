@@ -424,7 +424,7 @@ New users see a local-only clothing preference screen once before the normal che
 
 - Users can choose clothing items they actually use across Footwear, Pants, Shirts, Outerwear, and Accessories.
 - Saving requires at least one selected item in each category.
-- `Skip ->` bypasses validation, records the flow as completed/skipped, and keeps current default behavior unchanged.
+- `Skip ->` bypasses validation, records the flow as completed/skipped, and uses the grouped checklist with default clothing basics.
 - Saved selections can be edited later from Settings with `Edit clothing preferences`.
 - Saving preferences immediately refreshes the visible checklist if weather has already been loaded, without asking for location again.
 - Preferences stay on the current device in `localStorage`.
