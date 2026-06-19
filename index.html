@@ -57,6 +57,13 @@
               <strong id="routineStartValue">6:00 AM</strong>
             </label>
             <input id="routineStartInput" class="routine-start-slider" type="range" min="0" max="47" step="1" value="12">
+            <section class="preference-setting" aria-label="Clothing preference settings">
+              <div class="setting-copy">
+                <span>Clothing preferences</span>
+                <p>Choose what you actually wear. These choices stay on this device only.</p>
+              </div>
+              <button class="secondary-action" id="editClothingPreferencesButton" type="button">Edit clothing preferences</button>
+            </section>
             <section class="notification-setting" aria-label="Checklist reminder settings">
               <div class="setting-copy">
                 <span>Checklist reminders</span>
@@ -124,6 +131,21 @@
         <span>Update available</span>
         <button id="updateRefreshButton" type="button">Refresh</button>
       </div>
+
+      <!-- Local-only clothing preference onboarding/settings screen. -->
+      <section class="clothing-preferences-screen" id="clothingPreferencesScreen" hidden aria-labelledby="clothingPreferencesTitle">
+        <div class="preferences-card">
+          <button class="skip-link" id="clothingPreferencesSkip" type="button">Skip &#8594;</button>
+          <p class="kicker">Personalize</p>
+          <h1 class="preferences-title" id="clothingPreferencesTitle">What clothes do you wear</h1>
+          <p class="preferences-subtext">Choose the pieces you actually use so Ready can personalize your checklist.</p>
+          <form id="clothingPreferencesForm" novalidate>
+            <div class="preference-categories" id="clothingPreferenceCategories"></div>
+            <p class="preferences-message" id="clothingPreferencesMessage" aria-live="polite"></p>
+            <button class="primary-action" type="submit">Save preferences</button>
+          </form>
+        </div>
+      </section>
     </main>
   </body>
 </html>

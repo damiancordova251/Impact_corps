@@ -1,6 +1,14 @@
 // Main browser entry point: wires together location, weather, checklist rules,
 // reminders, service worker updates, and anonymous pilot analytics.
 import { APP_CONFIG } from "./config.js";
+import {
+  CLOTHING_PREFERENCE_CATEGORIES,
+  getSavedClothingPreferences,
+  hasCompletedClothingPreferences,
+  markClothingPreferencesSkipped,
+  saveClothingPreferences,
+  validateClothingPreferences
+} from "./clothingPreferences.js";
 import { getCurrentLocation, LocationAccessError } from "./location.js";
 import {
   getBrowserTimezone,
@@ -44,7 +52,9 @@ const state = {
   latestLocation: null,
   pushSubscriptionId: getSavedPushSubscriptionId(),
   completedTrackedForChecklist: false,
-  weatherScreenTracked: false
+  weatherScreenTracked: false,
+  clothingPreferencesMode: "onboarding",
+  startupFlowStarted: false
 };
 
 // DOM references are collected once so rendering functions can update the page
@@ -74,10 +84,16 @@ const elements = {
   timeAwayValue: document.querySelector("#timeAwayValue"),
   routineStartInput: document.querySelector("#routineStartInput"),
   routineStartValue: document.querySelector("#routineStartValue"),
+  editClothingPreferencesButton: document.querySelector("#editClothingPreferencesButton"),
   notificationStatus: document.querySelector("#notificationStatus"),
   notificationRoutineNote: document.querySelector("#notificationRoutineNote"),
   enableNotificationsButton: document.querySelector("#enableNotificationsButton"),
   testNotificationButton: document.querySelector("#testNotificationButton"),
+  clothingPreferencesScreen: document.querySelector("#clothingPreferencesScreen"),
+  clothingPreferencesForm: document.querySelector("#clothingPreferencesForm"),
+  clothingPreferencesSkip: document.querySelector("#clothingPreferencesSkip"),
+  clothingPreferenceCategories: document.querySelector("#clothingPreferenceCategories"),
+  clothingPreferencesMessage: document.querySelector("#clothingPreferencesMessage"),
   updateBanner: document.querySelector("#updateBanner"),
   updateRefreshButton: document.querySelector("#updateRefreshButton"),
   appStatus: document.querySelector("#appStatus")
@@ -94,8 +110,11 @@ elements.timeAwayInput.addEventListener("input", handleTimeAwayChange);
 elements.timeAwayInput.addEventListener("change", handleTimeAwayCommit);
 elements.routineStartInput.addEventListener("input", handleRoutineStartChange);
 elements.routineStartInput.addEventListener("change", handleRoutineStartCommit);
+elements.editClothingPreferencesButton.addEventListener("click", () => showClothingPreferencesScreen("settings"));
 elements.enableNotificationsButton.addEventListener("click", handleEnableNotifications);
 elements.testNotificationButton.addEventListener("click", handleTestNotification);
+elements.clothingPreferencesForm.addEventListener("submit", handleClothingPreferencesSave);
+elements.clothingPreferencesSkip.addEventListener("click", handleClothingPreferencesSkip);
 elements.updateRefreshButton?.addEventListener("click", () => {
   window.location.reload();
 });
@@ -106,11 +125,136 @@ window.addEventListener("resize", () => syncActiveScreenFromScroll());
 initializeTimeAwaySetting();
 initializeRoutineStartSetting();
 initializeNotificationSetting();
+renderClothingPreferenceCategories();
 registerServiceWorker();
 registerServiceWorkerMessages();
 trackPilotEvent("app_opened", { standalone: isStandalonePwa() });
 trackNotificationClickFromUrl();
-initializeSavedLocationChecklist();
+initializePersonalizationFlow();
+
+// First-run personalization is local-only. Saving or skipping dismisses the
+// screen and lets the normal saved-location startup continue.
+function initializePersonalizationFlow() {
+  if (hasCompletedClothingPreferences()) {
+    startAppExperience();
+    return;
+  }
+
+  showClothingPreferencesScreen("onboarding");
+}
+
+function startAppExperience() {
+  if (state.startupFlowStarted) {
+    return;
+  }
+
+  state.startupFlowStarted = true;
+  initializeSavedLocationChecklist();
+}
+
+function showClothingPreferencesScreen(mode) {
+  state.clothingPreferencesMode = mode;
+  renderClothingPreferenceCategories();
+  elements.clothingPreferencesMessage.textContent = "";
+  elements.clothingPreferencesScreen.hidden = false;
+  elements.clothingPreferencesScreen.scrollTop = 0;
+}
+
+function hideClothingPreferencesScreen() {
+  elements.clothingPreferencesScreen.hidden = true;
+}
+
+function renderClothingPreferenceCategories() {
+  const savedPreferences = getSavedClothingPreferences();
+  const categorySections = CLOTHING_PREFERENCE_CATEGORIES.map((category) => createClothingPreferenceCategory(
+    category,
+    savedPreferences[category.id] ?? []
+  ));
+
+  elements.clothingPreferenceCategories.replaceChildren(...categorySections);
+}
+
+function createClothingPreferenceCategory(category, selectedOptions) {
+  const section = document.createElement("section");
+  const heading = document.createElement("h2");
+  const helper = document.createElement("p");
+  const chipGroup = document.createElement("div");
+  const selectedSet = new Set(selectedOptions);
+
+  section.className = "preference-category";
+  heading.textContent = category.label;
+  helper.textContent = "Choose at least one";
+  chipGroup.className = "preference-chip-group";
+
+  chipGroup.replaceChildren(...category.options.map((option) => createClothingPreferenceChip(category.id, option, selectedSet.has(option))));
+  section.append(heading, helper, chipGroup);
+
+  return section;
+}
+
+function createClothingPreferenceChip(categoryId, option, selected) {
+  const label = document.createElement("label");
+  const checkbox = document.createElement("input");
+  const text = document.createElement("span");
+
+  label.className = "preference-chip";
+  checkbox.type = "checkbox";
+  checkbox.name = categoryId;
+  checkbox.value = option;
+  checkbox.checked = selected;
+  text.textContent = option;
+
+  label.append(checkbox, text);
+  return label;
+}
+
+function handleClothingPreferencesSave(event) {
+  event.preventDefault();
+
+  const preferences = getClothingPreferencesFromForm();
+  const validation = validateClothingPreferences(preferences);
+
+  if (!validation.valid) {
+    elements.clothingPreferencesMessage.textContent = `Choose at least one item for ${formatMissingPreferenceCategories(validation.missingCategories)}.`;
+    return;
+  }
+
+  try {
+    saveClothingPreferences(preferences);
+    hideClothingPreferencesScreen();
+    elements.appStatus.textContent = "Clothing preferences saved on this device only.";
+    startAppExperience();
+  } catch (error) {
+    elements.clothingPreferencesMessage.textContent = "Preferences could not be saved on this device.";
+  }
+}
+
+function handleClothingPreferencesSkip() {
+  if (state.clothingPreferencesMode === "onboarding") {
+    markClothingPreferencesSkipped();
+  }
+
+  hideClothingPreferencesScreen();
+  elements.appStatus.textContent = "Clothing preferences skipped. You can edit them from Settings.";
+  startAppExperience();
+}
+
+function getClothingPreferencesFromForm() {
+  return CLOTHING_PREFERENCE_CATEGORIES.reduce((preferences, category) => {
+    preferences[category.id] = [...elements.clothingPreferencesForm.querySelectorAll(`input[name="${category.id}"]:checked`)]
+      .map((input) => input.value);
+
+    return preferences;
+  }, {});
+}
+
+function formatMissingPreferenceCategories(categories) {
+  if (categories.length <= 1) {
+    return categories[0] ?? "each category";
+  }
+
+  return `${categories.slice(0, -1).join(", ")} and ${categories.at(-1)}`;
+}
 
 // Handles the explicit "Use current location" / "Update location" button flow:
 // get GPS, save it locally, fetch weather, then render the checklist.

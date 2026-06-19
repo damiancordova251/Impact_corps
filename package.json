@@ -10,7 +10,7 @@
     "generate:vapid": "web-push generate-vapid-keys",
     "test:recommendations": "node tests/recommendation.test.js",
     "check:functions": "node --check functions/_shared/backend.js && node --check functions/api/health.js && node --check functions/api/pilot-events.js && node --check functions/api/push/public-key.js && node --check functions/api/push/subscriptions.js && node --check functions/api/push/test.js",
-    "check": "node --check server/index.js && node --check server/pilotEventStore.js && node --check server/pushService.js && node --check server/scheduler.js && node --check server/subscriptionStore.js && node --check server/time.js && node --check src/app.js && node --check src/notifications.js && node --check src/pilotAnalytics.js && node --check src/reminders.js && node --check src/recommendation.js && node --check src/weather.js && node --check tests/recommendation.test.js && npm run check:functions && node --check workers/reminder-scheduler/src/index.js && node --check sw.js"
+    "check": "node --check server/index.js && node --check server/pilotEventStore.js && node --check server/pushService.js && node --check server/scheduler.js && node --check server/subscriptionStore.js && node --check server/time.js && node --check src/app.js && node --check src/clothingPreferences.js && node --check src/notifications.js && node --check src/pilotAnalytics.js && node --check src/reminders.js && node --check src/recommendation.js && node --check src/weather.js && node --check tests/recommendation.test.js && npm run check:functions && node --check workers/reminder-scheduler/src/index.js && node --check sw.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.106.0",

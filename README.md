@@ -402,6 +402,8 @@ The Express server serves both the PWA and the `/api/push/*` endpoints, so the s
 
 After first use, Ready stores the last usable latitude and longitude in this browser's `localStorage` so the checklist can load automatically on future opens. This saved location stays on that device and is not persisted to Supabase.
 
+Ready can also ask users which clothing pieces they actually wear. Clothing preferences are stored only in this browser's `localStorage` under `readyClothingPreferences`, with first-run completion tracked by `readyClothingPreferencesCompleted`. These selections are not sent to Supabase, the backend, or pilot analytics. In Personalization Stage A, the preferences are collected only; they do not change recommendation output yet.
+
 During a pilot, Ready may record basic anonymous activity events in Supabase to understand whether the app is being used. The anonymous device id is stored in localStorage. Event metadata is kept minimal and does not include exact location, names, emails, or personal identifiers.
 
 Tracked pilot events:
@@ -415,6 +417,25 @@ Tracked pilot events:
 - `location_updated`
 
 `checklist_generated` events may include the selected `expected_time_away_hours` value as non-sensitive metadata.
+
+## Clothing Preferences
+
+New users see a local-only clothing preference screen once before the normal checklist flow. Existing users who do not have `readyClothingPreferencesCompleted` saved will also see it once after updating.
+
+- Users can choose clothing items they actually use across Footwear, Pants, Shirts, Outerwear, and Accessories.
+- Saving requires at least one selected item in each category.
+- `Skip ->` bypasses validation, records the flow as completed/skipped, and keeps current default behavior unchanged.
+- Saved selections can be edited later from Settings with `Edit clothing preferences`.
+- Preferences stay on the current device in `localStorage`.
+- Preferences are not stored in Supabase, sent to Cloudflare/Render, or included in analytics events.
+
+Manual checks:
+
+1. Clear localStorage and reload. Confirm the clothing preferences screen appears.
+2. Try to save without selections and confirm a friendly validation message appears.
+3. Tap `Skip ->` and confirm the normal app starts.
+4. Select at least one item per category, save, refresh, and confirm selections persist when reopened from Settings.
+5. Confirm location, expected time away, reminders, checklist generation, and Weather still work normally.
 
 ## Expected Time Away
 

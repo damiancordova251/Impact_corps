@@ -1,6 +1,6 @@
 // Bump APP_VERSION whenever cached app shell or icon assets need to be refreshed
 // for installed PWAs.
-const APP_VERSION = "prepilot-2026-05-20-icon-bg-cleanup";
+const APP_VERSION = "personalization-stage-a-clothing-preferences";
 const CACHE_NAME = `ready-${APP_VERSION}`;
 
 // Core assets use network-first caching so pilot deployments are less likely to
@@ -11,6 +11,7 @@ const CORE_ASSETS = [
   "./styles.css",
   "./manifest.webmanifest",
   "./src/app.js",
+  "./src/clothingPreferences.js",
   "./src/config.js",
   "./src/location.js",
   "./src/notifications.js",
