@@ -34,6 +34,7 @@ export const CLOTHING_PREFERENCE_CATEGORIES = [
       "Sweatpants",
       "Leggings",
       "Shorts",
+      "Cargo pants",
       "Linen pants",
       "Skirt",
       "Dress",

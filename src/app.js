@@ -23,7 +23,7 @@ import {
   REMINDER_COPY
 } from "./reminders.js";
 import { fetchTodayWeather, WeatherFetchError } from "./weather.js";
-import { getSavedPersonalizedChecklist } from "./personalizedChecklist.js";
+import { getSavedGroupedChecklist } from "./personalizedChecklist.js";
 import {
   buildWindowWeather,
   createRecommendation,
@@ -50,6 +50,7 @@ const TIME_AWAY_OPTIONS = [3, 6, 9, 12];
 // handlers need to coordinate.
 const state = {
   latestWeather: null,
+  latestRecommendationRequestedAt: null,
   latestLocation: null,
   pushSubscriptionId: getSavedPushSubscriptionId(),
   completedTrackedForChecklist: false,
@@ -224,6 +225,12 @@ function handleClothingPreferencesSave(event) {
     saveClothingPreferences(preferences);
     hideClothingPreferencesScreen();
     elements.appStatus.textContent = "Clothing preferences saved on this device only.";
+
+    if (rerenderLatestChecklist("clothing_preferences_updated")) {
+      elements.appStatus.textContent = "Clothing preferences saved. Checklist updated.";
+      return;
+    }
+
     startAppExperience();
   } catch (error) {
     elements.clothingPreferencesMessage.textContent = "Preferences could not be saved on this device.";
@@ -310,19 +317,33 @@ function renderWindowRecommendation(weather, requestedAt = new Date(), options =
   const forecastWindow = getNextForecastWindow(weather, requestedAt, timeAwayHours);
   const windowWeather = buildWindowWeather(weather, forecastWindow);
   const recommendation = createRecommendation(windowWeather);
-  const personalizedChecklist = getSavedPersonalizedChecklist(recommendation);
-  const renderedChecklist = personalizedChecklist ?? recommendation.items;
+  const groupedChecklist = getSavedGroupedChecklist(recommendation);
+  const renderedChecklist = groupedChecklist ?? recommendation.items;
 
   state.latestWeather = weather;
+  state.latestRecommendationRequestedAt = requestedAt;
   renderRecommendation(weather, recommendation, timeAwayHours, renderedChecklist);
   trackPilotEvent("checklist_generated", {
     source: options.source ?? "unknown",
     itemCount: getChecklistItemCount(renderedChecklist),
     hasItems: getChecklistItemCount(renderedChecklist) > 0,
     expected_time_away_hours: timeAwayHours,
-    has_clothing_preferences: Boolean(personalizedChecklist),
-    personalized_checklist: Boolean(personalizedChecklist)
+    has_clothing_preferences: Boolean(groupedChecklist?.personalized),
+    personalized_checklist: Boolean(groupedChecklist?.personalized)
   });
+}
+
+function rerenderLatestChecklist(source) {
+  if (!state.latestWeather) {
+    return false;
+  }
+
+  renderWindowRecommendation(
+    state.latestWeather,
+    state.latestRecommendationRequestedAt ?? new Date(),
+    { source }
+  );
+  return true;
 }
 
 // Updates the main checklist screen after a successful weather fetch.

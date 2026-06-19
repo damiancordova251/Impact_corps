@@ -402,7 +402,7 @@ The Express server serves both the PWA and the `/api/push/*` endpoints, so the s
 
 After first use, Ready stores the last usable latitude and longitude in this browser's `localStorage` so the checklist can load automatically on future opens. This saved location stays on that device and is not persisted to Supabase.
 
-Ready can also ask users which clothing pieces they actually wear. Clothing preferences are stored only in this browser's `localStorage` under `readyClothingPreferences`, with first-run completion tracked by `readyClothingPreferencesCompleted`. These selections are not sent to Supabase, the backend, or pilot analytics. If valid preferences are saved, Ready uses them on-device to group checklist recommendations by clothing category.
+Ready can also ask users which clothing pieces they actually wear. Clothing preferences are stored only in this browser's `localStorage` under `readyClothingPreferences`, with first-run completion tracked by `readyClothingPreferencesCompleted`. These selections are not sent to Supabase, the backend, or pilot analytics. If valid preferences are saved, Ready uses them on-device to personalize grouped checklist recommendations by clothing category.
 
 During a pilot, Ready may record basic anonymous activity events in Supabase to understand whether the app is being used. The anonymous device id is stored in localStorage. Event metadata is kept minimal and does not include exact location, names, emails, or personal identifiers.
 
@@ -426,10 +426,11 @@ New users see a local-only clothing preference screen once before the normal che
 - Saving requires at least one selected item in each category.
 - `Skip ->` bypasses validation, records the flow as completed/skipped, and keeps current default behavior unchanged.
 - Saved selections can be edited later from Settings with `Edit clothing preferences`.
+- Saving preferences immediately refreshes the visible checklist if weather has already been loaded, without asking for location again.
 - Preferences stay on the current device in `localStorage`.
 - Preferences are not stored in Supabase, sent to Cloudflare/Render, or included in analytics events.
-- If preferences were skipped, missing, invalid, or incomplete, Ready keeps the generic flat checklist.
-- If preferences are saved and valid, Ready groups checklist items by `Footwear`, `Pants`, `Shirts`, `Outerwear`, and `Accessories`.
+- If preferences were skipped, missing, invalid, or incomplete, Ready still uses the grouped checklist layout with default clothing basics.
+- If preferences are saved and valid, Ready uses selected compatible items in grouped categories: `Footwear`, `Pants`, `Shirts`, `Outerwear`, and `Accessories`.
 - Clothing category headers use layer-weight labels only, such as `Shirts (Light-Medium)` or `Footwear (Heavy)`.
 - Accessories can use weather-purpose labels, such as `Accessories (Rain)`, `Accessories (Sun)`, or `Accessories (Cold/Wind)`.
 - If no selected item matches an important weather need, Ready uses a generic fallback, such as `Umbrella`, `Rain jacket`, `Rain boots`, or `Snow boots`.
@@ -438,11 +439,12 @@ Manual checks:
 
 1. Clear localStorage and reload. Confirm the clothing preferences screen appears.
 2. Try to save without selections and confirm a friendly validation message appears.
-3. Tap `Skip ->` and confirm the normal app starts.
+3. Tap `Skip ->`, generate a checklist, and confirm grouped category sections appear with default clothing basics.
 4. Select at least one item per category, save, refresh, and confirm selections persist when reopened from Settings.
-5. Generate a checklist with saved preferences and confirm it renders grouped category sections.
-6. Confirm rain/snow labels follow the rule: clothing categories use weight labels, accessories can use weather-purpose labels.
-7. Confirm location, expected time away, reminders, checklist generation, and Weather still work normally.
+5. Generate a checklist with saved preferences and confirm selected compatible items appear in grouped category sections.
+6. Edit preferences after a checklist is visible, tap `Save Preferences`, and confirm the checklist updates without refreshing location.
+7. Confirm rain/snow labels follow the rule: clothing categories use weight labels, accessories can use weather-purpose labels.
+8. Confirm location, expected time away, reminders, checklist generation, and Weather still work normally.
 
 ## Expected Time Away
 
@@ -459,7 +461,7 @@ The Ready Checklist uses the user's expected time away from home as its forecast
 
 Ready errs on the side of practical preparedness for the time you expect to be away from home. A 9 PM check with a 3-hour window should only consider the next few nighttime hours. A 9 PM check with a 12-hour window may include daylight or later rain if the user expects to be away long enough.
 
-Recommendation logic always builds a clothing foundation first: one flexible top item and one flexible bottom item, usually with 2-3 slash-separated options. Accessories such as rain gear, sun protection, cold accessories, and winter footwear are added only when relevant. With saved clothing preferences, that same weather judgment is mapped to the user's selected clothing and rendered as grouped category sections.
+Recommendation logic always builds a clothing foundation first: one flexible top item and one flexible bottom item, usually with 2-3 slash-separated options. Accessories such as rain gear, sun protection, cold accessories, and winter footwear are added only when relevant. The same weather judgment is rendered as grouped category sections; saved clothing preferences personalize the items, while skipped or missing preferences use default clothing basics.
 
 Rain handling is window-aware:
 

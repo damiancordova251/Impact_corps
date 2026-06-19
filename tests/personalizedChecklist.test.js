@@ -102,7 +102,7 @@ function addHours(date, hours) {
 function completePreferences(overrides = {}) {
   return {
     footwear: ["Sandals", "Sneakers", "Rain boots", "Snow boots", "Ankle boots"],
-    pants: ["Shorts", "Jeans", "Trousers", "Thermal leggings/base layer"],
+    pants: ["Shorts", "Cargo pants", "Jeans", "Trousers", "Thermal leggings/base layer"],
     shirts: ["T-shirt", "Tank top", "Long-sleeve shirt", "Turtleneck", "Thermal top/base layer"],
     outerwear: ["Rain jacket", "Windbreaker", "Puffer jacket", "Heavy coat"],
     accessories: ["Sunglasses", "Sun hat", "Umbrella", "Beanie", "Scarf", "Gloves"],
@@ -144,8 +144,52 @@ function assertMaxThreeItems(checklist) {
     makeWeather(),
     getNextForecastWindow(makeWeather(), NOW, 6)
   ));
+  const checklist = createPersonalizedChecklist(recommendation, completePreferences(), {
+    completionStatus: "skipped"
+  });
 
-  assert.equal(createPersonalizedChecklist(recommendation, completePreferences(), { completionStatus: "skipped" }), null);
+  assert.equal(checklist.personalized, false);
+  assert.equal(checklist.usesDefaultPreferences, true);
+  assertSection(checklist, "Shirts", "Light", ["T-shirt", "Tank top"]);
+  assertSection(checklist, "Pants", "Light-Medium", ["Shorts", "Cargo pants"]);
+  assertSection(checklist, "Footwear", "Medium", ["Sandals", "Sneakers"]);
+  assertClothingLabelsUseWeights(checklist);
+}
+
+{
+  const recommendation = createRecommendation(buildWindowWeather(
+    makeWeather({
+      temperature: 55,
+      feelsLike: 55,
+      high: 59,
+      low: 51,
+      weatherCode: 3,
+      hourlyOverrides: [rainAt(2)]
+    }),
+    getNextForecastWindow(makeWeather({
+      temperature: 55,
+      feelsLike: 55,
+      high: 59,
+      low: 51,
+      weatherCode: 3,
+      hourlyOverrides: [rainAt(2)]
+    }), NOW, 6)
+  ));
+  const checklist = createPersonalizedChecklist(recommendation, {
+    footwear: [],
+    pants: ["Jeans"],
+    shirts: ["Long-sleeve shirt"],
+    outerwear: [],
+    accessories: []
+  }, {
+    completionStatus: "saved"
+  });
+
+  assert.equal(checklist.personalized, false);
+  assertSection(checklist, "Outerwear", "Light-Medium", ["Rain jacket"]);
+  assertSection(checklist, "Footwear", "Medium", ["Rain boots"]);
+  assertSection(checklist, "Accessories", "Rain", ["Umbrella"]);
+  assertClothingLabelsUseWeights(checklist);
 }
 
 {

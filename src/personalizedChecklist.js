@@ -14,6 +14,13 @@ const CATEGORY_LABELS = {
   accessories: "Accessories"
 };
 const MAX_ITEMS_PER_CATEGORY = 3;
+const DEFAULT_CLOTHING_PREFERENCES = {
+  footwear: ["Sneakers", "Sandals", "Rain boots", "Snow boots"],
+  pants: ["Jeans", "Cargo pants", "Shorts", "Joggers", "Sweatpants", "Thermal leggings/base layer"],
+  shirts: ["T-shirt", "Tank top", "Long-sleeve shirt", "Button-down shirt", "Turtleneck", "Thermal top/base layer"],
+  outerwear: ["Hoodie", "Crewneck sweatshirt", "Cardigan", "Rain jacket", "Windbreaker", "Puffer jacket", "Heavy coat", "Parka"],
+  accessories: ["Umbrella", "Sunglasses", "Baseball cap", "Sun hat", "Beanie", "Scarf", "Gloves", "Earmuffs", "Neck gaiter"]
+};
 
 const WARM_SHIRTS = [
   "T-shirt",
@@ -57,6 +64,7 @@ const SUN_SHIRTS = [
 
 const WARM_PANTS = [
   "Shorts",
+  "Cargo pants",
   "Linen pants",
   "Skirt",
   "Dress",
@@ -65,6 +73,7 @@ const WARM_PANTS = [
 ];
 const MILD_PANTS = [
   "Jeans",
+  "Cargo pants",
   "Chinos",
   "Trousers",
   "Joggers",
@@ -248,14 +257,13 @@ const FALLBACKS = {
   }
 };
 
-export function getSavedPersonalizedChecklist(recommendation) {
+export function getSavedGroupedChecklist(recommendation) {
   const completionStatus = getClothingPreferencesCompletionStatus();
+  const savedPreferences = completionStatus === "saved"
+    ? getSavedClothingPreferences()
+    : null;
 
-  if (completionStatus !== "saved") {
-    return null;
-  }
-
-  return createPersonalizedChecklist(recommendation, getSavedClothingPreferences(), {
+  return createPersonalizedChecklist(recommendation, savedPreferences, {
     completionStatus
   });
 }
@@ -263,18 +271,23 @@ export function getSavedPersonalizedChecklist(recommendation) {
 export function createPersonalizedChecklist(recommendation, preferences, options = {}) {
   const completionStatus = options.completionStatus ?? "saved";
 
-  if (completionStatus !== "saved" || !recommendation?.weatherNeeds) {
+  if (!recommendation?.weatherNeeds) {
     return null;
   }
 
   const normalizedPreferences = normalizeClothingPreferences(preferences);
+  const useSavedPreferences = completionStatus === "saved"
+    && validateClothingPreferences(normalizedPreferences).valid;
+  const effectivePreferences = useSavedPreferences
+    ? normalizedPreferences
+    : normalizeClothingPreferences(DEFAULT_CLOTHING_PREFERENCES);
 
-  if (!validateClothingPreferences(normalizedPreferences).valid) {
+  if (!validateClothingPreferences(effectivePreferences).valid) {
     return null;
   }
 
   const sections = CATEGORY_ORDER
-    .map((categoryId) => createCategorySection(categoryId, normalizedPreferences, recommendation.weatherNeeds))
+    .map((categoryId) => createCategorySection(categoryId, effectivePreferences, recommendation.weatherNeeds))
     .filter(Boolean);
 
   if (sections.length === 0) {
@@ -282,7 +295,8 @@ export function createPersonalizedChecklist(recommendation, preferences, options
   }
 
   return {
-    personalized: true,
+    personalized: useSavedPreferences,
+    usesDefaultPreferences: !useSavedPreferences,
     sections,
     items: sections.flatMap((section) => section.items)
   };
