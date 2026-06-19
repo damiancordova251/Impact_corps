@@ -23,6 +23,7 @@ import {
   REMINDER_COPY
 } from "./reminders.js";
 import { fetchTodayWeather, WeatherFetchError } from "./weather.js";
+import { getSavedPersonalizedChecklist } from "./personalizedChecklist.js";
 import {
   buildWindowWeather,
   createRecommendation,
@@ -309,19 +310,23 @@ function renderWindowRecommendation(weather, requestedAt = new Date(), options =
   const forecastWindow = getNextForecastWindow(weather, requestedAt, timeAwayHours);
   const windowWeather = buildWindowWeather(weather, forecastWindow);
   const recommendation = createRecommendation(windowWeather);
+  const personalizedChecklist = getSavedPersonalizedChecklist(recommendation);
+  const renderedChecklist = personalizedChecklist ?? recommendation.items;
 
   state.latestWeather = weather;
-  renderRecommendation(weather, recommendation, timeAwayHours);
+  renderRecommendation(weather, recommendation, timeAwayHours, renderedChecklist);
   trackPilotEvent("checklist_generated", {
     source: options.source ?? "unknown",
-    itemCount: recommendation.items.length,
-    hasItems: recommendation.items.length > 0,
-    expected_time_away_hours: timeAwayHours
+    itemCount: getChecklistItemCount(renderedChecklist),
+    hasItems: getChecklistItemCount(renderedChecklist) > 0,
+    expected_time_away_hours: timeAwayHours,
+    has_clothing_preferences: Boolean(personalizedChecklist),
+    personalized_checklist: Boolean(personalizedChecklist)
   });
 }
 
 // Updates the main checklist screen after a successful weather fetch.
-function renderRecommendation(weather, recommendation, timeAwayHours) {
+function renderRecommendation(weather, recommendation, timeAwayHours, checklist) {
   elements.appShell.classList.remove("is-error", "is-warning", "is-complete");
   elements.statusPill.textContent = "Updated";
   elements.kicker.textContent = "Today";
@@ -330,7 +335,7 @@ function renderRecommendation(weather, recommendation, timeAwayHours) {
   elements.primaryAction.disabled = false;
   elements.primaryAction.textContent = "Update location";
 
-  renderItems(recommendation.items);
+  renderItems(checklist);
   updateCompletionState();
   renderFacts(weather);
 }
@@ -359,9 +364,17 @@ function renderFacts(weather) {
   elements.appStatus.textContent = "Checklist updated. Location stays on this device only.";
 }
 
-// Rebuilds the checklist rows from the recommendation output.
-function renderItems(items) {
+// Rebuilds the checklist rows from generic strings or personalized grouped
+// sections, while preserving checkbox completion behavior.
+function renderItems(checklist) {
   state.completedTrackedForChecklist = false;
+
+  if (isPersonalizedChecklist(checklist)) {
+    renderPersonalizedItems(checklist.sections);
+    return;
+  }
+
+  const items = Array.isArray(checklist) ? checklist : [];
 
   if (items.length === 0) {
     const listItem = document.createElement("li");
@@ -372,6 +385,15 @@ function renderItems(items) {
   }
 
   elements.itemList.replaceChildren(...items.map(createChecklistItem));
+}
+
+function renderPersonalizedItems(sections) {
+  if (sections.length === 0) {
+    renderItems([]);
+    return;
+  }
+
+  elements.itemList.replaceChildren(...sections.map(createChecklistSection));
 }
 
 // Loading and error renderers keep the main screen in a clear state while async
@@ -409,6 +431,28 @@ function renderError(error) {
 // mark.
 function createChecklistItem(item) {
   const listItem = document.createElement("li");
+
+  listItem.append(createChecklistRow(item));
+
+  return listItem;
+}
+
+function createChecklistSection(section) {
+  const listItem = document.createElement("li");
+  const heading = document.createElement("h2");
+  const rows = document.createElement("div");
+
+  listItem.className = "checklist-section";
+  heading.className = "checklist-section-title";
+  heading.textContent = section.title;
+  rows.className = "checklist-section-items";
+  rows.replaceChildren(...section.items.map(createChecklistRow));
+  listItem.append(heading, rows);
+
+  return listItem;
+}
+
+function createChecklistRow(item) {
   const label = document.createElement("label");
   const checkbox = document.createElement("input");
   const box = document.createElement("span");
@@ -422,9 +466,8 @@ function createChecklistItem(item) {
   text.textContent = item;
 
   label.append(checkbox, box, text);
-  listItem.append(label);
 
-  return listItem;
+  return label;
 }
 
 // Marks the screen complete when every item is checked and records that pilot
@@ -445,6 +488,20 @@ function updateCompletionState() {
 function clearItems() {
   elements.itemList.replaceChildren();
   updateCompletionState();
+}
+
+function isPersonalizedChecklist(checklist) {
+  return checklist
+    && typeof checklist === "object"
+    && Array.isArray(checklist.sections);
+}
+
+function getChecklistItemCount(checklist) {
+  if (isPersonalizedChecklist(checklist)) {
+    return checklist.sections.reduce((total, section) => total + section.items.length, 0);
+  }
+
+  return Array.isArray(checklist) ? checklist.length : 0;
 }
 
 function getChecklistPrompt(timeAwayHours = getSavedTimeAwayHours()) {

@@ -94,6 +94,14 @@ function sanitizeMetadata(metadata) {
     clean.hasItems = metadata.hasItems;
   }
 
+  if (typeof metadata.has_clothing_preferences === "boolean") {
+    clean.has_clothing_preferences = metadata.has_clothing_preferences;
+  }
+
+  if (typeof metadata.personalized_checklist === "boolean") {
+    clean.personalized_checklist = metadata.personalized_checklist;
+  }
+
   if (typeof metadata.standalone === "boolean") {
     clean.standalone = metadata.standalone;
   }

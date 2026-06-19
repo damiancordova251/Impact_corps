@@ -1,6 +1,6 @@
 // Bump APP_VERSION whenever cached app shell or icon assets need to be refreshed
 // for installed PWAs.
-const APP_VERSION = "personalization-stage-a-clothing-preferences";
+const APP_VERSION = "personalization-stage-b-grouped-checklist";
 const CACHE_NAME = `ready-${APP_VERSION}`;
 
 // Core assets use network-first caching so pilot deployments are less likely to
@@ -15,6 +15,7 @@ const CORE_ASSETS = [
   "./src/config.js",
   "./src/location.js",
   "./src/notifications.js",
+  "./src/personalizedChecklist.js",
   "./src/pilotAnalytics.js",
   "./src/reminders.js",
   "./src/weather.js",

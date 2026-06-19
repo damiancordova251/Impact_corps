@@ -286,6 +286,33 @@ checkmark box beside each item. */
   font-weight: 800;
 }
 
+.checklist-section {
+  min-height: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(245, 247, 251, 0.72);
+}
+
+.checklist-section-title {
+  margin: 0 0 10px;
+  color: var(--muted);
+  font-size: 0.86rem;
+  font-weight: 900;
+  letter-spacing: 0;
+}
+
+.checklist-section-items {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.checklist-section .checklist-row {
+  min-height: 50px;
+  padding: 10px 12px;
+}
+
 .empty-checklist {
   border: 1px solid rgba(15, 118, 110, 0.25);
   border-radius: 8px;

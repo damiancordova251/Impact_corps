@@ -139,12 +139,14 @@ export function createRecommendation(windowWeather) {
     { item: formatClothingGroup("Bottom", bottomOptions, BOTTOM_CLOTHING_WEIGHTS), priority: 190 },
     ...accessories
   ];
+  const items = actions.slice(0, MAX_CHECKLIST_ITEMS).map((action) => action.item);
 
   return {
     title: "Ready for your weather window",
     reason: combineReasons(features.reasons, features.durationHours),
     checklistTitle: READY_CHECKLIST_TITLE,
-    items: actions.slice(0, MAX_CHECKLIST_ITEMS).map((action) => action.item)
+    items,
+    weatherNeeds: createWeatherNeeds(features)
   };
 }
 
@@ -499,6 +501,105 @@ function hasReasonableWeightSpread(options, weightMap) {
 
 function getClothingWeight(option, weightMap) {
   return weightMap.get(option) ?? 3;
+}
+
+// Structured needs let personalization map the same weather judgment to saved
+// local clothing preferences while keeping the generic checklist text intact.
+function createWeatherNeeds(features) {
+  const snow = features.winterPrecipRisk;
+  const rain = features.rainRisk && !snow;
+  const sun = features.daylightSunny && !snow;
+  const cold = features.cold || features.veryCold;
+  const wind = features.windy;
+
+  return {
+    weights: {
+      shirts: getPersonalizedShirtWeight(features),
+      pants: getPersonalizedPantsWeight(features),
+      footwear: getPersonalizedFootwearWeight(features),
+      outerwear: getPersonalizedOuterwearWeight(features)
+    },
+    conditions: {
+      rain,
+      snow,
+      sun,
+      wind,
+      cold,
+      cool: features.cool,
+      hot: features.hot,
+      veryCold: features.veryCold
+    },
+    categoryNeeds: {
+      shirts: true,
+      pants: true,
+      footwear: true,
+      outerwear: snow || rain || wind || features.cool || cold
+    }
+  };
+}
+
+function getPersonalizedShirtWeight(features) {
+  if (features.winterPrecipRisk || features.veryCold || features.minFeels <= 35) {
+    return "Heavy";
+  }
+
+  if (features.coldWind || features.minFeels <= 45) {
+    return "Medium-Heavy";
+  }
+
+  if (features.rainRisk || features.cool || features.cloudy || features.windy) {
+    return features.minFeels <= 50 ? "Medium" : "Light-Medium";
+  }
+
+  return features.hot || features.maxFeels >= 70 ? "Light" : "Light-Medium";
+}
+
+function getPersonalizedPantsWeight(features) {
+  if (features.winterPrecipRisk || features.veryCold || features.minFeels <= 35) {
+    return "Heavy";
+  }
+
+  if (features.coldWind || features.minFeels <= 45) {
+    return "Medium-Heavy";
+  }
+
+  if (features.rainRisk || features.cool || features.cloudy || features.windy) {
+    return "Medium";
+  }
+
+  return features.hot || features.maxFeels >= 74 ? "Light" : "Light-Medium";
+}
+
+function getPersonalizedFootwearWeight(features) {
+  if (features.winterPrecipRisk || features.veryCold || features.minFeels <= 35) {
+    return "Heavy";
+  }
+
+  if (features.rainRisk || features.cold || features.coldWind || features.minFeels <= 45) {
+    return features.rainRisk && features.minFeels > 45 ? "Medium" : "Heavy";
+  }
+
+  return features.hot || features.maxFeels >= 74 ? "Light" : "Medium";
+}
+
+function getPersonalizedOuterwearWeight(features) {
+  if (features.winterPrecipRisk || features.veryCold || features.minFeels <= 35) {
+    return "Heavy";
+  }
+
+  if (features.coldWind || features.minFeels <= 45) {
+    return "Heavy";
+  }
+
+  if (features.rainRisk) {
+    return features.minFeels <= 50 ? "Medium-Heavy" : "Light-Medium";
+  }
+
+  if (features.windy || features.cool || features.cloudy) {
+    return features.minFeels <= 52 ? "Medium-Heavy" : "Medium";
+  }
+
+  return "Light-Medium";
 }
 
 // Rain uses a window-level profile so an umbrella can be recommended before

@@ -119,10 +119,20 @@ const VALID_OPTIONS_BY_CATEGORY = new Map(
 );
 
 export function hasCompletedClothingPreferences() {
-  try {
-    return window.localStorage.getItem(CLOTHING_PREFERENCES_COMPLETED_STORAGE_KEY) !== null;
-  } catch (error) {
+  const status = getClothingPreferencesCompletionStatus();
+
+  if (status === "unavailable") {
     return true;
+  }
+
+  return status !== null;
+}
+
+export function getClothingPreferencesCompletionStatus() {
+  try {
+    return window.localStorage.getItem(CLOTHING_PREFERENCES_COMPLETED_STORAGE_KEY);
+  } catch (error) {
+    return "unavailable";
   }
 }
 
@@ -172,7 +182,7 @@ export function validateClothingPreferences(preferences) {
   };
 }
 
-function normalizeClothingPreferences(preferences) {
+export function normalizeClothingPreferences(preferences) {
   return CLOTHING_PREFERENCE_CATEGORIES.reduce((normalized, category) => {
     const validOptions = VALID_OPTIONS_BY_CATEGORY.get(category.id);
     const selectedOptions = Array.isArray(preferences?.[category.id])
