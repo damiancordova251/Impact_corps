@@ -681,7 +681,6 @@ room to feel calm, focused, and polished. */
   width: 82px;
   height: 82px;
   filter: drop-shadow(0 16px 28px rgba(15, 23, 42, 0.18));
-  animation: setupFloat 2600ms ease-in-out infinite;
 }
 
 .onboarding-orbit,
@@ -693,29 +692,32 @@ room to feel calm, focused, and polished. */
 }
 
 .onboarding-orbit {
-  inset: 4px;
-  border: 1px solid rgba(15, 118, 110, 0.22);
-  animation: setupPulse 2200ms ease-in-out infinite;
+  inset: 6px;
+  border: 1px solid rgba(15, 118, 110, 0.16);
+  opacity: 0.72;
 }
 
 .onboarding-visual::before {
-  inset: 18px;
+  inset: 20px;
   background: rgba(15, 118, 110, 0.1);
+  animation: setupGlow 2600ms ease-in-out infinite;
 }
 
 .onboarding-visual::after {
-  width: 12px;
-  height: 12px;
-  right: 18px;
-  top: 20px;
-  background: #5eead4;
-  box-shadow: 0 0 0 8px rgba(94, 234, 212, 0.14);
+  width: 7px;
+  height: 7px;
+  right: 24px;
+  top: 26px;
+  background: rgba(15, 118, 110, 0.6);
+  box-shadow:
+    -14px 30px 0 rgba(94, 234, 212, 0.52),
+    16px 36px 0 rgba(15, 118, 110, 0.28);
   animation: setupDot 2400ms ease-in-out infinite;
 }
 
 .onboarding-visual.is-creating .onboarding-orbit {
-  border-top-color: var(--accent);
-  animation: setupSpin 1100ms linear infinite;
+  border-color: rgba(15, 118, 110, 0.22);
+  animation: setupPulse 1800ms ease-in-out infinite;
 }
 
 .onboarding-title {
@@ -844,27 +846,25 @@ room to feel calm, focused, and polished. */
   }
 }
 
-@keyframes setupFloat {
-  0%,
-  100% {
-    transform: translateY(0);
-  }
-
-  50% {
-    transform: translateY(-6px);
-  }
-}
-
 @keyframes setupPulse {
   0%,
   100% {
-    transform: scale(0.96);
+    opacity: 0.45;
+  }
+
+  50% {
+    opacity: 0.9;
+  }
+}
+
+@keyframes setupGlow {
+  0%,
+  100% {
     opacity: 0.55;
   }
 
   50% {
-    transform: scale(1.04);
-    opacity: 1;
+    opacity: 0.9;
   }
 }
 
@@ -879,15 +879,9 @@ room to feel calm, focused, and polished. */
   }
 }
 
-@keyframes setupSpin {
-  to {
-    transform: rotate(1turn);
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .onboarding-card,
-  .onboarding-visual img,
+  .onboarding-visual::before,
   .onboarding-orbit,
   .onboarding-visual::after {
     animation: none;

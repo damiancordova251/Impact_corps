@@ -483,10 +483,13 @@ function selectPersonalizedItems(selectedItems, candidateLists, fallback, option
   }
 
   if (options.preferSelectedFallback && selectedItems.length > 0) {
-    return [{
-      label: selectedItems[0],
-      warning: getMismatchWarning(options.categoryId, options.weatherNeeds)
-    }];
+    const warning = getMismatchWarning(options.categoryId, options.weatherNeeds);
+
+    if (!warning) {
+      return [selectedItems[0]];
+    }
+
+    return [{ label: selectedItems[0], warning }];
   }
 
   return fallback ? [fallback] : [];
@@ -500,7 +503,9 @@ function getMismatchWarning(categoryId, weatherNeeds) {
   }
 
   if (conditions.rain) {
-    return "May not be ideal for rain.";
+    return categoryId === "footwear"
+      ? "May not be ideal for rain."
+      : null;
   }
 
   if (conditions.wind) {
@@ -508,7 +513,9 @@ function getMismatchWarning(categoryId, weatherNeeds) {
   }
 
   if (conditions.sun) {
-    return "May not offer much sun protection.";
+    return categoryId === "accessories"
+      ? null
+      : "May not offer much sun protection.";
   }
 
   if (conditions.cold) {

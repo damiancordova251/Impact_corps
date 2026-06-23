@@ -335,9 +335,9 @@ function assertMaxThreeItems(checklist) {
   assertSection(checklist, "Outerwear", "Light-Medium", ["Hoodie"]);
   assertSection(checklist, "Footwear", "Medium", ["Sneakers"]);
   assertSection(checklist, "Accessories", "Rain", ["Beanie"]);
-  assertItemWarning(checklist, "Outerwear", "Hoodie", "May not be ideal for rain.");
   assertItemWarning(checklist, "Footwear", "Sneakers", "May not be ideal for rain.");
-  assertItemWarning(checklist, "Accessories", "Beanie", "May not be ideal for rain.");
+  assertNoItemWarnings(checklist, "Outerwear");
+  assertNoItemWarnings(checklist, "Accessories");
   assertClothingLabelsUseWeights(checklist);
 }
 
@@ -375,7 +375,7 @@ function assertMaxThreeItems(checklist) {
   }));
 
   assertSection(checklist, "Accessories", "Sun", ["Beanie"]);
-  assertItemWarning(checklist, "Accessories", "Beanie", "May not offer much sun protection.");
+  assertNoItemWarnings(checklist, "Accessories");
   assertClothingLabelsUseWeights(checklist);
 }
 
