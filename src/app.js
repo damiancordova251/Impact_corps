@@ -464,6 +464,7 @@ function createChecklistSection(section) {
   const rows = document.createElement("div");
 
   listItem.className = "checklist-section";
+  listItem.dataset.checklistSection = "true";
   heading.className = "checklist-section-title";
   heading.textContent = section.title;
   rows.className = "checklist-section-items";
@@ -477,25 +478,43 @@ function createChecklistRow(item) {
   const label = document.createElement("label");
   const checkbox = document.createElement("input");
   const box = document.createElement("span");
+  const copy = document.createElement("span");
   const text = document.createElement("span");
+  const normalizedItem = normalizeChecklistItem(item);
 
   label.className = "checklist-row";
   checkbox.type = "checkbox";
   box.className = "checkbox-mark";
   box.innerHTML = "&#10003;";
+  copy.className = "checklist-copy";
   text.className = "checklist-label";
-  text.textContent = item;
+  text.textContent = normalizedItem.label;
+  copy.append(text);
 
-  label.append(checkbox, box, text);
+  if (normalizedItem.warning) {
+    const warning = document.createElement("span");
+
+    warning.className = "checklist-warning";
+    warning.textContent = normalizedItem.warning;
+    copy.append(warning);
+  }
+
+  label.append(checkbox, box, copy);
 
   return label;
 }
 
-// Marks the screen complete when every item is checked and records that pilot
-// event only once per generated checklist.
+// Marks the screen complete when flat fallback items are all checked, or when
+// grouped checklist sections each have at least one selected option.
 function updateCompletionState() {
   const checkboxes = [...elements.itemList.querySelectorAll("input[type='checkbox']")];
-  const isComplete = checkboxes.length > 0 && checkboxes.every((checkbox) => checkbox.checked);
+  const groupedSections = [...elements.itemList.querySelectorAll("[data-checklist-section='true']")];
+  const completableSections = groupedSections
+    .filter((section) => section.querySelectorAll("input[type='checkbox']").length > 0);
+  const isComplete = groupedSections.length > 0
+    ? completableSections.length > 0
+      && completableSections.every((section) => [...section.querySelectorAll("input[type='checkbox']")].some((checkbox) => checkbox.checked))
+    : checkboxes.length > 0 && checkboxes.every((checkbox) => checkbox.checked);
 
   elements.appShell.classList.toggle("is-complete", isComplete);
 
@@ -509,6 +528,20 @@ function updateCompletionState() {
 function clearItems() {
   elements.itemList.replaceChildren();
   updateCompletionState();
+}
+
+function normalizeChecklistItem(item) {
+  if (item && typeof item === "object" && !Array.isArray(item)) {
+    return {
+      label: item.label ?? "",
+      warning: item.warning ?? ""
+    };
+  }
+
+  return {
+    label: String(item),
+    warning: ""
+  };
 }
 
 function isPersonalizedChecklist(checklist) {

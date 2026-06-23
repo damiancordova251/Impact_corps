@@ -118,9 +118,45 @@ function assertSection(checklist, category, label, items) {
   const section = findSection(checklist, category);
 
   assert.ok(section, `${category} section should exist.`);
+
+  const labels = getSectionItemLabels(section);
+
   assert.equal(section.title, `${category} (${label})`);
   items.forEach((item) => {
-    assert.equal(section.items.includes(item), true, `${section.title} should include ${item}.`);
+    assert.equal(labels.includes(item), true, `${section.title} should include ${item}.`);
+  });
+}
+
+function getSectionItemLabels(section) {
+  return section.items.map(getItemLabel);
+}
+
+function getItemLabel(item) {
+  return item && typeof item === "object" && !Array.isArray(item)
+    ? item.label
+    : item;
+}
+
+function assertItemWarning(checklist, category, itemLabel, warning) {
+  const section = findSection(checklist, category);
+
+  assert.ok(section, `${category} section should exist.`);
+
+  const item = section.items.find((sectionItem) => getItemLabel(sectionItem) === itemLabel);
+
+  assert.ok(item, `${section.title} should include ${itemLabel}.`);
+  assert.equal(typeof item, "object", `${itemLabel} should include warning metadata.`);
+  assert.equal(item.warning, warning);
+}
+
+function assertNoItemWarnings(checklist, category) {
+  const section = findSection(checklist, category);
+
+  assert.ok(section, `${category} section should exist.`);
+  section.items.forEach((item) => {
+    const hasWarning = item && typeof item === "object" && Boolean(item.warning);
+
+    assert.equal(hasWarning, false, `${getItemLabel(item)} should not show a warning.`);
   });
 }
 
@@ -240,6 +276,9 @@ function assertMaxThreeItems(checklist) {
   assertSection(checklist, "Outerwear", "Light-Medium", ["Rain jacket"]);
   assertSection(checklist, "Footwear", "Medium", ["Rain boots"]);
   assertSection(checklist, "Accessories", "Rain", ["Umbrella"]);
+  assertNoItemWarnings(checklist, "Outerwear");
+  assertNoItemWarnings(checklist, "Footwear");
+  assertNoItemWarnings(checklist, "Accessories");
   assertClothingLabelsUseWeights(checklist);
   assertMaxThreeItems(checklist);
 }
@@ -293,9 +332,50 @@ function assertMaxThreeItems(checklist) {
     accessories: ["Beanie"]
   }));
 
-  assertSection(checklist, "Outerwear", "Light-Medium", ["Rain jacket"]);
-  assertSection(checklist, "Footwear", "Medium", ["Rain boots"]);
-  assertSection(checklist, "Accessories", "Rain", ["Umbrella"]);
+  assertSection(checklist, "Outerwear", "Light-Medium", ["Hoodie"]);
+  assertSection(checklist, "Footwear", "Medium", ["Sneakers"]);
+  assertSection(checklist, "Accessories", "Rain", ["Beanie"]);
+  assertItemWarning(checklist, "Outerwear", "Hoodie", "May not be ideal for rain.");
+  assertItemWarning(checklist, "Footwear", "Sneakers", "May not be ideal for rain.");
+  assertItemWarning(checklist, "Accessories", "Beanie", "May not be ideal for rain.");
+  assertClothingLabelsUseWeights(checklist);
+}
+
+{
+  const checklist = personalizedItems(makeWeather({
+    temperature: 30,
+    feelsLike: 25,
+    high: 32,
+    low: 24,
+    weatherCode: 3
+  }), completePreferences({
+    footwear: ["Sandals"],
+    pants: ["Shorts"],
+    shirts: ["Tank top"],
+    outerwear: ["Cardigan"],
+    accessories: ["Sunglasses"]
+  }));
+
+  assertSection(checklist, "Outerwear", "Heavy", ["Cardigan"]);
+  assertSection(checklist, "Accessories", "Cold", ["Sunglasses"]);
+  assertItemWarning(checklist, "Outerwear", "Cardigan", "May be too light for the cold.");
+  assertItemWarning(checklist, "Accessories", "Sunglasses", "May not help much with the cold.");
+  assertClothingLabelsUseWeights(checklist);
+}
+
+{
+  const checklist = personalizedItems(makeWeather({
+    temperature: 84,
+    feelsLike: 84,
+    high: 90,
+    low: 78,
+    weatherCode: 0
+  }), completePreferences({
+    accessories: ["Beanie"]
+  }));
+
+  assertSection(checklist, "Accessories", "Sun", ["Beanie"]);
+  assertItemWarning(checklist, "Accessories", "Beanie", "May not offer much sun protection.");
   assertClothingLabelsUseWeights(checklist);
 }
 

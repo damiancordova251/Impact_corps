@@ -433,7 +433,8 @@ New users see a local-only clothing preference screen once before the normal che
 - If preferences are saved and valid, Ready uses selected compatible items in grouped categories: `Footwear`, `Pants`, `Shirts`, `Outerwear`, and `Accessories`.
 - Clothing category headers use layer-weight labels only, such as `Shirts (Light-Medium)` or `Footwear (Heavy)`.
 - Accessories can use weather-purpose labels, such as `Accessories (Rain)`, `Accessories (Sun)`, or `Accessories (Cold/Wind)`.
-- If no selected item matches an important weather need, Ready uses a generic fallback, such as `Umbrella`, `Rain jacket`, `Rain boots`, or `Snow boots`.
+- Grouped checklist categories are complete when one visible option in each category is checked.
+- If no selected item matches an important weather need, Ready first suggests the closest selected item from that category with a small warning. If there is no same-category selection, it uses a generic fallback such as `Umbrella`, `Rain jacket`, `Rain boots`, or `Snow boots`.
 
 Manual checks:
 
@@ -443,8 +444,9 @@ Manual checks:
 4. Select at least one item per category, save, refresh, and confirm selections persist when reopened from Settings.
 5. Generate a checklist with saved preferences and confirm selected compatible items appear in grouped category sections.
 6. Edit preferences after a checklist is visible, tap `Save Preferences`, and confirm the checklist updates without refreshing location.
-7. Confirm rain/snow labels follow the rule: clothing categories use weight labels, accessories can use weather-purpose labels.
-8. Confirm location, expected time away, reminders, checklist generation, and Weather still work normally.
+7. Check one option in each visible category and confirm the completed state appears.
+8. Confirm rain/snow labels follow the rule: clothing categories use weight labels, accessories can use weather-purpose labels.
+9. Confirm location, expected time away, reminders, checklist generation, and Weather still work normally.
 
 ## Expected Time Away
 

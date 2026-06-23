@@ -286,6 +286,19 @@ checkmark box beside each item. */
   font-weight: 800;
 }
 
+.checklist-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.checklist-warning {
+  color: var(--warning);
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
 .checklist-section {
   min-height: 0;
   border: 1px solid var(--line);

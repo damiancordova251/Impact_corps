@@ -287,7 +287,9 @@ export function createPersonalizedChecklist(recommendation, preferences, options
   }
 
   const sections = CATEGORY_ORDER
-    .map((categoryId) => createCategorySection(categoryId, effectivePreferences, recommendation.weatherNeeds))
+    .map((categoryId) => createCategorySection(categoryId, effectivePreferences, recommendation.weatherNeeds, {
+      preferSelectedFallback: useSavedPreferences
+    }))
     .filter(Boolean);
 
   if (sections.length === 0) {
@@ -302,9 +304,9 @@ export function createPersonalizedChecklist(recommendation, preferences, options
   };
 }
 
-function createCategorySection(categoryId, preferences, weatherNeeds) {
+function createCategorySection(categoryId, preferences, weatherNeeds, options = {}) {
   if (categoryId === "accessories") {
-    return createAccessorySection(preferences, weatherNeeds);
+    return createAccessorySection(preferences, weatherNeeds, options);
   }
 
   if (categoryId === "outerwear" && !weatherNeeds.categoryNeeds.outerwear) {
@@ -316,13 +318,18 @@ function createCategorySection(categoryId, preferences, weatherNeeds) {
   const items = selectPersonalizedItems(
     preferences[categoryId],
     candidateLists,
-    getCategoryFallback(categoryId, weight, weatherNeeds)
+    getCategoryFallback(categoryId, weight, weatherNeeds),
+    {
+      categoryId,
+      weatherNeeds,
+      preferSelectedFallback: options.preferSelectedFallback
+    }
   );
 
   return createSection(categoryId, weight, items);
 }
 
-function createAccessorySection(preferences, weatherNeeds) {
+function createAccessorySection(preferences, weatherNeeds, options = {}) {
   const purposeLabel = getAccessoryPurposeLabel(weatherNeeds.conditions);
 
   if (!purposeLabel) {
@@ -333,7 +340,12 @@ function createAccessorySection(preferences, weatherNeeds) {
   const items = selectPersonalizedItems(
     preferences.accessories,
     candidateLists,
-    FALLBACKS.accessories[purposeLabel]
+    FALLBACKS.accessories[purposeLabel],
+    {
+      categoryId: "accessories",
+      weatherNeeds,
+      preferSelectedFallback: options.preferSelectedFallback
+    }
   );
 
   return createSection("accessories", purposeLabel, items);
@@ -455,7 +467,7 @@ function getWeightCandidates(categoryId, weight) {
   return WEIGHT_CANDIDATES[categoryId]?.[weight] ?? [];
 }
 
-function selectPersonalizedItems(selectedItems, candidateLists, fallback) {
+function selectPersonalizedItems(selectedItems, candidateLists, fallback, options = {}) {
   const selectedSet = new Set(selectedItems);
   const candidates = candidateLists.flat();
   const matches = [];
@@ -470,7 +482,42 @@ function selectPersonalizedItems(selectedItems, candidateLists, fallback) {
     return matches.slice(0, MAX_ITEMS_PER_CATEGORY);
   }
 
+  if (options.preferSelectedFallback && selectedItems.length > 0) {
+    return [{
+      label: selectedItems[0],
+      warning: getMismatchWarning(options.categoryId, options.weatherNeeds)
+    }];
+  }
+
   return fallback ? [fallback] : [];
+}
+
+function getMismatchWarning(categoryId, weatherNeeds) {
+  const conditions = weatherNeeds.conditions;
+
+  if (conditions.snow) {
+    return "May not be ideal for snow.";
+  }
+
+  if (conditions.rain) {
+    return "May not be ideal for rain.";
+  }
+
+  if (conditions.wind) {
+    return "May not block much wind.";
+  }
+
+  if (conditions.sun) {
+    return "May not offer much sun protection.";
+  }
+
+  if (conditions.cold) {
+    return categoryId === "accessories"
+      ? "May not help much with the cold."
+      : "May be too light for the cold.";
+  }
+
+  return "Closest match from your closet.";
 }
 
 function getAccessoryPurposeLabel(conditions) {
