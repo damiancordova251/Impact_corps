@@ -658,6 +658,10 @@ room to feel calm, focused, and polished. */
   animation: setupRise 420ms ease both;
 }
 
+.onboarding-screen[data-step="creating"] .onboarding-card {
+  text-align: center;
+}
+
 .onboarding-progress {
   min-height: 24px;
   color: var(--muted);
@@ -720,6 +724,10 @@ room to feel calm, focused, and polished. */
   animation: setupPulse 1800ms ease-in-out infinite;
 }
 
+.onboarding-visual.is-creating {
+  display: none;
+}
+
 .onboarding-title {
   margin: 8px 0 10px;
   color: var(--text);
@@ -727,6 +735,11 @@ room to feel calm, focused, and polished. */
   line-height: 1;
   letter-spacing: 0;
   text-align: left;
+}
+
+.onboarding-screen[data-step="creating"] .onboarding-title,
+.onboarding-screen[data-step="creating"] .onboarding-body {
+  text-align: center;
 }
 
 .onboarding-body {
@@ -751,6 +764,32 @@ room to feel calm, focused, and polished. */
   font-size: 0.88rem;
   font-weight: 700;
   line-height: 1.35;
+}
+
+.onboarding-loading-dots {
+  min-height: 36px;
+  margin: 4px 0 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+}
+
+.onboarding-loading-dots span {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: var(--accent);
+  opacity: 0.26;
+  animation: loadingDotFade 1500ms ease-in-out infinite;
+}
+
+.onboarding-loading-dots span:nth-child(2) {
+  animation-delay: 180ms;
+}
+
+.onboarding-loading-dots span:nth-child(3) {
+  animation-delay: 360ms;
 }
 
 .onboarding-slider-control {
@@ -834,6 +873,10 @@ room to feel calm, focused, and polished. */
   gap: 10px;
 }
 
+.onboarding-screen[data-step="creating"] .onboarding-actions {
+  display: none;
+}
+
 @keyframes setupRise {
   from {
     opacity: 0;
@@ -879,12 +922,29 @@ room to feel calm, focused, and polished. */
   }
 }
 
+@keyframes loadingDotFade {
+  0%,
+  70%,
+  100% {
+    opacity: 0.26;
+  }
+
+  35% {
+    opacity: 0.86;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .onboarding-card,
   .onboarding-visual::before,
   .onboarding-orbit,
-  .onboarding-visual::after {
+  .onboarding-visual::after,
+  .onboarding-loading-dots span {
     animation: none;
+  }
+
+  .onboarding-loading-dots span {
+    opacity: 0.54;
   }
 }
 

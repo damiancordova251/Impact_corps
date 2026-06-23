@@ -186,6 +186,7 @@ function startAppExperience() {
 function showOnboardingStep(step, options = {}) {
   state.onboardingStep = step;
   elements.clothingPreferencesScreen.hidden = true;
+  elements.onboardingScreen.dataset.step = step;
 
   if (step === "clothing") {
     elements.onboardingScreen.hidden = true;
@@ -226,6 +227,10 @@ function showOnboardingStep(step, options = {}) {
 
   if (step === "timeAway") {
     renderOnboardingTimeAwayControl();
+  }
+
+  if (step === "creating") {
+    renderOnboardingLoadingIndicator();
   }
 
   if (step === "reminders" && state.onboardingReminderCanContinue) {
@@ -291,8 +296,8 @@ function getOnboardingStepCopy(step) {
     creating: {
       progress: "Step 8 of 8",
       kicker: "Almost There",
-      title: "Creating your Ready Checklist",
-      body: "Checking your weather and matching it to your day.",
+      title: "Creating your checklist",
+      body: "Checking weather, layers, and accessories\u2026",
       primaryLabel: "Creating...",
       visualClass: "is-creating"
     }
@@ -507,6 +512,19 @@ function renderOnboardingLocationControl() {
   helper.className = "onboarding-helper";
   helper.textContent = "Location stays on this device only. You can change browser location permission later in Safari or your browser settings.";
   elements.onboardingControl.replaceChildren(helper);
+}
+
+function renderOnboardingLoadingIndicator() {
+  const indicator = document.createElement("div");
+
+  indicator.className = "onboarding-loading-dots";
+  indicator.setAttribute("aria-hidden", "true");
+  indicator.replaceChildren(
+    document.createElement("span"),
+    document.createElement("span"),
+    document.createElement("span")
+  );
+  elements.onboardingControl.replaceChildren(indicator);
 }
 
 function renderOnboardingTimeAwayControl() {
