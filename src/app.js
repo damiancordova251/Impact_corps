@@ -230,7 +230,7 @@ function showOnboardingStep(step, options = {}) {
   }
 
   if (step === "creating") {
-    renderOnboardingLoadingIndicator();
+    renderOnboardingProgressBar();
   }
 
   if (step === "reminders" && state.onboardingReminderCanContinue) {
@@ -298,8 +298,7 @@ function getOnboardingStepCopy(step) {
       kicker: "Almost There",
       title: "Creating your checklist",
       body: "Checking weather, layers, and accessories\u2026",
-      primaryLabel: "Creating...",
-      visualClass: "is-creating"
+      primaryLabel: "Creating..."
     }
   };
 
@@ -514,17 +513,15 @@ function renderOnboardingLocationControl() {
   elements.onboardingControl.replaceChildren(helper);
 }
 
-function renderOnboardingLoadingIndicator() {
-  const indicator = document.createElement("div");
+function renderOnboardingProgressBar() {
+  const progress = document.createElement("div");
+  const bar = document.createElement("span");
 
-  indicator.className = "onboarding-loading-dots";
-  indicator.setAttribute("aria-hidden", "true");
-  indicator.replaceChildren(
-    document.createElement("span"),
-    document.createElement("span"),
-    document.createElement("span")
-  );
-  elements.onboardingControl.replaceChildren(indicator);
+  progress.className = "onboarding-loading-bar";
+  progress.setAttribute("role", "progressbar");
+  progress.setAttribute("aria-label", "Creating checklist");
+  progress.append(bar);
+  elements.onboardingControl.replaceChildren(progress);
 }
 
 function renderOnboardingTimeAwayControl() {

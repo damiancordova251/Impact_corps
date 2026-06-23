@@ -719,12 +719,7 @@ room to feel calm, focused, and polished. */
   animation: setupDot 2400ms ease-in-out infinite;
 }
 
-.onboarding-visual.is-creating .onboarding-orbit {
-  border-color: rgba(15, 118, 110, 0.22);
-  animation: setupPulse 1800ms ease-in-out infinite;
-}
-
-.onboarding-visual.is-creating {
+.onboarding-screen[data-step="creating"] .onboarding-visual {
   display: none;
 }
 
@@ -766,30 +761,23 @@ room to feel calm, focused, and polished. */
   line-height: 1.35;
 }
 
-.onboarding-loading-dots {
-  min-height: 36px;
-  margin: 4px 0 8px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-}
-
-.onboarding-loading-dots span {
-  width: 8px;
-  height: 8px;
+.onboarding-loading-bar {
+  position: relative;
+  width: min(100%, 260px);
+  height: 6px;
+  margin: 10px auto 12px;
   border-radius: 999px;
+  overflow: hidden;
+  background: rgba(15, 118, 110, 0.14);
+}
+
+.onboarding-loading-bar span {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 42%;
+  border-radius: inherit;
   background: var(--accent);
-  opacity: 0.26;
-  animation: loadingDotFade 1500ms ease-in-out infinite;
-}
-
-.onboarding-loading-dots span:nth-child(2) {
-  animation-delay: 180ms;
-}
-
-.onboarding-loading-dots span:nth-child(3) {
-  animation-delay: 360ms;
+  animation: loadingBarSlide 1600ms ease-in-out infinite;
 }
 
 .onboarding-slider-control {
@@ -889,17 +877,6 @@ room to feel calm, focused, and polished. */
   }
 }
 
-@keyframes setupPulse {
-  0%,
-  100% {
-    opacity: 0.45;
-  }
-
-  50% {
-    opacity: 0.9;
-  }
-}
-
 @keyframes setupGlow {
   0%,
   100% {
@@ -922,15 +899,14 @@ room to feel calm, focused, and polished. */
   }
 }
 
-@keyframes loadingDotFade {
+@keyframes loadingBarSlide {
   0%,
-  70%,
   100% {
-    opacity: 0.26;
+    transform: translateX(-105%);
   }
 
-  35% {
-    opacity: 0.86;
+  50% {
+    transform: translateX(240%);
   }
 }
 
@@ -939,12 +915,13 @@ room to feel calm, focused, and polished. */
   .onboarding-visual::before,
   .onboarding-orbit,
   .onboarding-visual::after,
-  .onboarding-loading-dots span {
+  .onboarding-loading-bar span {
     animation: none;
   }
 
-  .onboarding-loading-dots span {
-    opacity: 0.54;
+  .onboarding-loading-bar span {
+    width: 64%;
+    transform: none;
   }
 }
 
