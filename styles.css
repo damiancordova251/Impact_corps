@@ -687,38 +687,6 @@ room to feel calm, focused, and polished. */
   filter: drop-shadow(0 16px 28px rgba(15, 23, 42, 0.18));
 }
 
-.onboarding-orbit,
-.onboarding-visual::before,
-.onboarding-visual::after {
-  content: "";
-  position: absolute;
-  border-radius: 999px;
-}
-
-.onboarding-orbit {
-  inset: 6px;
-  border: 1px solid rgba(15, 118, 110, 0.16);
-  opacity: 0.72;
-}
-
-.onboarding-visual::before {
-  inset: 20px;
-  background: rgba(15, 118, 110, 0.1);
-  animation: setupGlow 2600ms ease-in-out infinite;
-}
-
-.onboarding-visual::after {
-  width: 7px;
-  height: 7px;
-  right: 24px;
-  top: 26px;
-  background: rgba(15, 118, 110, 0.6);
-  box-shadow:
-    -14px 30px 0 rgba(94, 234, 212, 0.52),
-    16px 36px 0 rgba(15, 118, 110, 0.28);
-  animation: setupDot 2400ms ease-in-out infinite;
-}
-
 .onboarding-screen[data-step="creating"] .onboarding-visual {
   display: none;
 }
@@ -877,28 +845,6 @@ room to feel calm, focused, and polished. */
   }
 }
 
-@keyframes setupGlow {
-  0%,
-  100% {
-    opacity: 0.55;
-  }
-
-  50% {
-    opacity: 0.9;
-  }
-}
-
-@keyframes setupDot {
-  0%,
-  100% {
-    transform: scale(0.82);
-  }
-
-  50% {
-    transform: scale(1.18);
-  }
-}
-
 @keyframes loadingBarSlide {
   0%,
   100% {
@@ -912,9 +858,6 @@ room to feel calm, focused, and polished. */
 
 @media (prefers-reduced-motion: reduce) {
   .onboarding-card,
-  .onboarding-visual::before,
-  .onboarding-orbit,
-  .onboarding-visual::after,
   .onboarding-loading-bar span {
     animation: none;
   }
