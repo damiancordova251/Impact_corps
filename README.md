@@ -418,9 +418,25 @@ Tracked pilot events:
 
 `checklist_generated` events may include the selected `expected_time_away_hours` value and booleans for whether a personalized checklist was used. Exact clothing selections are not included.
 
+## First-Run Onboarding
+
+New users see a local setup flow before the first checklist. Returning users with `readyOnboardingCompleted=true` go straight into the normal app. Existing testers who already have a saved location or completed clothing preferences are automatically marked complete so they are not trapped in setup.
+
+Onboarding writes to the same local settings that remain editable later in Settings:
+
+- Location for weather, stored only on this device.
+- Usual leave/reminder time, defaulting to `6:00 AM`.
+- Expected time away, defaulting to `9 hours` during onboarding.
+- Clothing preferences, stored only on this device.
+- Optional reminder permission and push subscription.
+
+Location is the only required step before a checklist can be generated. The other setup questions can be skipped or defaulted. If the user taps `Skip setup`, Ready saves the default leave time, saves `9 hours` for expected time away, marks clothing preferences as skipped so the grouped default checklist is used, keeps reminders disabled, and still asks for location.
+
+Clothing preferences remain local-only and are not sent to Supabase, Cloudflare, Render, or analytics. Exact location is also not sent to Supabase.
+
 ## Clothing Preferences
 
-New users see a local-only clothing preference screen once before the normal checklist flow. Existing users who do not have `readyClothingPreferencesCompleted` saved will also see it once after updating.
+Clothing preferences are part of first-run onboarding and can be reopened later from Settings.
 
 - Users can choose clothing items they actually use across Footwear, Pants, Shirts, Outerwear, and Accessories.
 - Saving requires at least one selected item in each category.

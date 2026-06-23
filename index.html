@@ -132,6 +132,27 @@
         <button id="updateRefreshButton" type="button">Refresh</button>
       </div>
 
+      <!-- First-run setup writes to the same local settings used by the normal
+      app, then hands off to the generated checklist. -->
+      <section class="onboarding-screen" id="onboardingScreen" hidden aria-labelledby="onboardingTitle">
+        <div class="onboarding-card">
+          <div class="onboarding-progress" id="onboardingProgress">Step 1 of 8</div>
+          <div class="onboarding-visual" id="onboardingVisual" aria-hidden="true">
+            <span class="onboarding-orbit"></span>
+            <img src="icons/app-icon.svg" alt="">
+          </div>
+          <p class="kicker" id="onboardingKicker">Welcome</p>
+          <h1 class="onboarding-title" id="onboardingTitle">Hello!</h1>
+          <p class="onboarding-body" id="onboardingBody">This is Ready, your on-the-go clothing checklist for the day&rsquo;s weather.</p>
+          <div class="onboarding-control" id="onboardingControl"></div>
+          <p class="onboarding-message" id="onboardingMessage" aria-live="polite"></p>
+          <div class="onboarding-actions">
+            <button class="primary-action" id="onboardingPrimary" type="button">Get Started</button>
+            <button class="secondary-action" id="onboardingSecondary" type="button" hidden>Skip</button>
+          </div>
+        </div>
+      </section>
+
       <!-- Local-only clothing preference onboarding/settings screen. -->
       <section class="clothing-preferences-screen" id="clothingPreferencesScreen" hidden aria-labelledby="clothingPreferencesTitle">
         <div class="preferences-card">
