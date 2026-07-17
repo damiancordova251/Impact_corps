@@ -1,5 +1,5 @@
 import webPush from "web-push";
-import { createChecklistReminder } from "../src/reminders.js";
+import { createChecklistReminder } from "../src/domain/reminders.js";
 
 // Reads VAPID keys from environment variables and configures web-push only when
 // the backend has everything needed to send browser push notifications.

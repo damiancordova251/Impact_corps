@@ -1,3 +1,5 @@
+import { bestNumber, formatTemp } from "../utils/format.js";
+
 // Weather code groups and thresholds define the checklist rules. Keeping them
 // here makes it easier to tune recommendations without hunting through UI code.
 const RAIN_CODES = new Set([51, 53, 55, 56, 57, 61, 63, 65, 66, 67, 80, 81, 82, 95, 96, 99]);
@@ -725,10 +727,6 @@ function parseForecastTime(value) {
   return new Date(value);
 }
 
-function bestNumber(...values) {
-  return values.find((value) => Number.isFinite(value)) ?? 0;
-}
-
 function hasCode(codeSet, ...codes) {
   return codes.some((code) => codeSet.has(Number(code)));
 }
@@ -771,9 +769,4 @@ function normalizeForecastWindowHours(value) {
   return Number.isFinite(durationHours) && durationHours > 0
     ? durationHours
     : DEFAULT_FORECAST_WINDOW_HOURS;
-}
-
-// Shared temperature formatter for both recommendation copy and weather details.
-export function formatTemp(value) {
-  return `${Math.round(value)}\u00b0F`;
 }

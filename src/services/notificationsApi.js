@@ -1,4 +1,6 @@
-import { APP_CONFIG } from "./config.js";
+import { APP_CONFIG } from "../config.js";
+import { PUSH_SUBSCRIPTION_ID_STORAGE_KEY } from "../constants/storageKeys.js";
+import { isStandalonePwa } from "../utils/browser.js";
 
 const APP_ICON_URL = "./icons/app-icon-192.png";
 
@@ -61,7 +63,7 @@ export async function sendTestNotification(reminder) {
 }
 
 // Creates or reuses the browser PushSubscription, then saves the subscription
-// details to the Express backend for scheduled Web Push reminders.
+// details to the backend for scheduled Web Push reminders.
 export async function subscribeToPushReminders({ routineStartMinutes, timezone }) {
   if (!areNotificationsSupported()) {
     throw new Error("Push notifications are not supported in this browser.");
@@ -83,6 +85,29 @@ export async function subscribeToPushReminders({ routineStartMinutes, timezone }
   return response.subscription;
 }
 
+// Removes the browser PushSubscription and deletes the matching server row so
+// scheduled reminders stop immediately. Re-enabling later goes through
+// subscribeToPushReminders again, which recreates whatever is missing.
+export async function unsubscribeFromPushReminders(subscriptionId) {
+  if ("serviceWorker" in navigator) {
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      const existingSubscription = await registration.pushManager.getSubscription();
+
+      if (existingSubscription) {
+        await existingSubscription.unsubscribe();
+      }
+    } catch (error) {
+      // Browser-side unsubscribe is best-effort; the server row is still
+      // removed below so scheduled reminders stop either way.
+    }
+  }
+
+  if (subscriptionId) {
+    await deleteJson(`/api/push/subscriptions/${encodeURIComponent(subscriptionId)}`);
+  }
+}
+
 // Backend helpers wrap small JSON API calls and keep URL construction compatible
 // with both local development and hosted deployments.
 export async function sendServerTestNotification(subscriptionId) {
@@ -93,6 +118,34 @@ export async function sendServerTestNotification(subscriptionId) {
 
 export function getBrowserTimezone() {
   return Intl.DateTimeFormat().resolvedOptions().timeZone;
+}
+
+// Persists which browser PushSubscription this device last saved, so the
+// Settings toggle can tell "subscribed" from "not subscribed" across restarts.
+export function getSavedPushSubscriptionId() {
+  try {
+    return window.localStorage.getItem(PUSH_SUBSCRIPTION_ID_STORAGE_KEY);
+  } catch (error) {
+    return null;
+  }
+}
+
+export function savePushSubscriptionId(subscriptionId) {
+  try {
+    window.localStorage.setItem(PUSH_SUBSCRIPTION_ID_STORAGE_KEY, subscriptionId);
+    return true;
+  } catch (error) {
+    return false;
+  }
+}
+
+export function clearSavedPushSubscriptionId() {
+  try {
+    window.localStorage.removeItem(PUSH_SUBSCRIPTION_ID_STORAGE_KEY);
+    return true;
+  } catch (error) {
+    return false;
+  }
 }
 
 async function fetchVapidPublicKey() {
@@ -142,6 +195,18 @@ async function postJson(path, payload) {
   return data;
 }
 
+async function deleteJson(path) {
+  const response = await fetch(apiUrl(path), {
+    method: "DELETE"
+  });
+
+  if (!response.ok && response.status !== 404) {
+    const data = await response.json().catch(() => ({}));
+
+    throw new Error(data.error ?? "Reminder server request failed.");
+  }
+}
+
 // Resolves relative API paths against either an override base URL or the current
 // app origin.
 function apiUrl(path) {
@@ -172,9 +237,4 @@ function urlBase64ToUint8Array(base64String) {
 function isLikelyIos() {
   return /iPad|iPhone|iPod/.test(navigator.userAgent)
     || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
-}
-
-function isStandalonePwa() {
-  return window.matchMedia("(display-mode: standalone)").matches
-    || window.navigator.standalone === true;
 }

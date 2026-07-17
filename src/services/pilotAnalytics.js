@@ -1,4 +1,4 @@
-import { APP_CONFIG } from "./config.js";
+import { APP_CONFIG } from "../config.js";
 
 // Pilot analytics intentionally stays anonymous and small: one local device id,
 // a limited event allowlist, and minimal non-sensitive metadata.

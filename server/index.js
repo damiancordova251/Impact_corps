@@ -134,6 +134,17 @@ app.get("/api/push/subscriptions", async (req, res) => {
   }
 });
 
+// Removes a saved subscription so scheduled reminders stop immediately. This
+// is what "turn reminders off" in the app actually calls.
+app.delete("/api/push/subscriptions/:id", async (req, res) => {
+  try {
+    await removeSubscription(req.params.id);
+    res.status(204).send();
+  } catch (error) {
+    sendSubscriptionStoreError(res, error);
+  }
+});
+
 // Sends an immediate backend push to one subscription or all subscriptions for
 // end-to-end notification testing.
 app.post("/api/push/test", async (req, res) => {

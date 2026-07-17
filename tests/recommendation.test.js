@@ -3,7 +3,7 @@ import {
   buildWindowWeather,
   createRecommendation,
   getNextForecastWindow
-} from "../src/recommendation.js";
+} from "../src/domain/recommendation.js";
 
 const NOW = new Date("2026-05-20T08:00:00-04:00");
 const TOP_OPTIONS = [

@@ -3,8 +3,8 @@ import {
   buildWindowWeather,
   createRecommendation,
   getNextForecastWindow
-} from "../src/recommendation.js";
-import { createPersonalizedChecklist } from "../src/personalizedChecklist.js";
+} from "../src/domain/recommendation.js";
+import { createPersonalizedChecklist } from "../src/domain/personalizedChecklist.js";
 
 const NOW = new Date("2026-05-20T08:00:00-04:00");
 const CLOTHING_LABEL_PATTERN = /^(Footwear|Pants|Shirts|Outerwear) \((Light|Light-Medium|Medium|Medium-Heavy|Heavy)\)$/;

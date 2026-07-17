@@ -1,25 +1,40 @@
 // Bump APP_VERSION whenever cached app shell or icon assets need to be refreshed
 // for installed PWAs.
-const APP_VERSION = "welcome-icon-static";
+const APP_VERSION = "share-notif-toggle-icon-polish";
 const CACHE_NAME = `ready-${APP_VERSION}`;
 
 // Core assets use network-first caching so pilot deployments are less likely to
-// get stuck on stale HTML, JS, or CSS.
+// get stuck on stale HTML, JS, or CSS. Kept in sync with the src/ module tree
+// (constants/state/dom/utils/services/domain/features).
 const CORE_ASSETS = [
   "./",
   "./index.html",
   "./styles.css",
   "./manifest.webmanifest",
   "./src/app.js",
-  "./src/clothingPreferences.js",
   "./src/config.js",
-  "./src/location.js",
-  "./src/notifications.js",
-  "./src/personalizedChecklist.js",
-  "./src/pilotAnalytics.js",
-  "./src/reminders.js",
-  "./src/weather.js",
-  "./src/recommendation.js"
+  "./src/constants/storageKeys.js",
+  "./src/state/appState.js",
+  "./src/dom/elements.js",
+  "./src/utils/format.js",
+  "./src/utils/browser.js",
+  "./src/services/weather.js",
+  "./src/services/location.js",
+  "./src/services/notificationsApi.js",
+  "./src/services/pilotAnalytics.js",
+  "./src/domain/recommendation.js",
+  "./src/domain/personalizedChecklist.js",
+  "./src/domain/clothingPreferences.js",
+  "./src/domain/reminders.js",
+  "./src/features/onboarding/onboarding.js",
+  "./src/features/checklist/checklist.js",
+  "./src/features/weatherScreen/weatherScreen.js",
+  "./src/features/settings/timeAway.js",
+  "./src/features/settings/routineStart.js",
+  "./src/features/notifications/notificationSettings.js",
+  "./src/features/clothingPreferences/clothingPreferencesUI.js",
+  "./src/features/pwa/serviceWorkerClient.js",
+  "./src/features/share/shareFab.js"
 ];
 
 // Icon assets can safely use cache-first behavior because they are versioned by

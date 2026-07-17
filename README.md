@@ -549,6 +549,14 @@ You can inspect saved subscriptions with:
 curl http://localhost:3000/api/push/subscriptions
 ```
 
+The in-app "Disable reminders" button (Settings, once reminders are on) removes a subscription the same way this does it manually:
+
+```sh
+curl -X DELETE http://localhost:3000/api/push/subscriptions/<id>
+```
+
+This deletes the Supabase row (so scheduled reminders stop) and is mirrored by `functions/api/push/subscriptions/[id].js` for the Cloudflare Pages deployment.
+
 ## Saved Location Test
 
 1. Open the app on a device with no saved location.

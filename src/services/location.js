@@ -1,4 +1,4 @@
-import { APP_CONFIG } from "./config.js";
+import { APP_CONFIG } from "../config.js";
 
 // Custom error codes let the UI show specific, helpful copy for permission,
 // browser support, timeout, and HTTPS problems.

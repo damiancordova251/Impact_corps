@@ -1,4 +1,4 @@
-import { APP_CONFIG } from "./config.js";
+import { APP_CONFIG } from "../config.js";
 
 // A named error type keeps forecast failures separate from location or app
 // rendering errors.

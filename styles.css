@@ -629,6 +629,100 @@ updated app version. */
   cursor: pointer;
 }
 
+/* Referral/share floating action button and its confirmation modal. The
+right offset mirrors the desktop-centered app-shell (max-width 480px) so the
+button sits at the card's corner instead of the browser window's corner. */
+.share-fab {
+  position: fixed;
+  right: max(20px, calc((100vw - 480px) / 2 + 20px));
+  bottom: calc(88px + env(safe-area-inset-bottom));
+  z-index: 25;
+  width: 56px;
+  height: 56px;
+  border: 0;
+  border-radius: 999px;
+  display: grid;
+  place-items: center;
+  background: var(--text);
+  color: #ffffff;
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.28);
+  cursor: pointer;
+}
+
+.share-fab:active {
+  transform: translateY(1px);
+}
+
+.share-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+}
+
+.share-modal-overlay[hidden] {
+  display: none;
+}
+
+.share-modal-backdrop {
+  position: absolute;
+  inset: 0;
+  background: rgba(15, 23, 42, 0.45);
+}
+
+.share-modal {
+  position: relative;
+  width: min(100%, 420px);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 22px 20px 20px;
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  animation: setupRise 220ms ease both;
+}
+
+.share-modal-title {
+  margin: 6px 0 10px;
+  color: var(--text);
+  font-size: 1.5rem;
+  font-weight: 900;
+  line-height: 1.15;
+}
+
+.share-modal-body {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 650;
+  line-height: 1.4;
+}
+
+.share-modal-message {
+  min-height: 20px;
+  margin: 12px 0 0;
+  color: var(--accent-strong);
+  font-size: 0.88rem;
+  font-weight: 800;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  white-space: pre-line;
+}
+
+.share-modal-actions {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .share-modal {
+    animation: none;
+  }
+}
+
 /* First-run onboarding borrows the app's compact card language but gives setup
 room to feel calm, focused, and polished. */
 .onboarding-screen {

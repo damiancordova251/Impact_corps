@@ -1,1032 +1,1091 @@
-# Morning Wear / Impact Corps PWA Post-Mortem
+# Ready PWA Postmortem and Handoff
 
-This document summarizes the Morning Wear / Impact Corps PWA build from the original product idea through the current Web Push prototype. It is written to be self-contained for a future Codex chat that has access to this repository but not the original development conversation.
+Last updated: July 17, 2026
 
-Sources used:
+This document summarizes what has been built so far for the Impact Corps / Ready PWA project. It is intended as a self-contained handoff for future development work.
 
-- Impact Corps PRD / planning document: `/Users/damian/Downloads/Impact Corps_ Notes, Research. etc..md`
-- Current codebase
-- Git history through `stage_6B`
-- `README.md`
-- Stage 7A testing context provided by the product manager/director
+## Recent Update (Modularization, Referral Share, Notification Toggle, Icon Polish)
 
-## 1. Original Product Goal
+- The frontend was reorganized from one 1667-line `src/app.js` into feature-scoped modules under `src/{constants,state,dom,utils,services,domain,features}/`. `src/app.js` is now a thin bootstrap. See the updated "Files Worth Knowing" list below for the new paths.
+- A referral/share feature was added: a floating share button (`src/features/share/shareFab.js`) opens a confirmation modal, then uses the native Web Share API where available, falling back to clipboard copy (and, as a last resort, showing the message inline for manual copy). The shared link is always `window.location.origin`, never a hardcoded domain, since Render and Cloudflare Pages are different origins.
+- Reminder notifications can now be turned off, not just on. The Settings button toggles between "Enable reminders" / "Disable reminders"; disabling unsubscribes the browser `PushSubscription` and deletes the matching Supabase row via a new `DELETE /api/push/subscriptions/:id` route (added to both the Express server and Cloudflare Pages Functions at `functions/api/push/subscriptions/[id].js`). This is what actually cancels scheduled reminders, not just local UI state.
+- The app icon's top strap-loop arc was recentered (it was 18px off from the body's true center) so the backpack mark is symmetric; PNGs are regenerated from the SVG via `npm run generate:icons` (uses `sharp`, a new devDependency).
 
-The original goal was to reduce morning decision stress by turning weather information into a fast, plain recommendation for what to wear or bring.
+## Executive Summary
 
-The PRD framed the core pain point clearly: existing weather apps show numbers, percentages, and conditions, but they do not directly answer the practical question a rushed person has in the morning: "What should I wear or bring when I leave?"
+Ready is a mobile-first PWA that turns local weather into a practical clothing checklist. The original product idea was called Morning Wear and focused on reducing morning decision stress. The product has since evolved into Ready: a broader preparation tool that helps users decide what to wear or bring for the amount of time they expect to be away from home.
 
-Target beneficiary in the PRD:
+The current app supports:
 
-- A busy parent, specifically a mom of four, who has to get herself and children ready in a time-constrained morning routine.
-- The broader beneficiary also includes students, commuters, people who recently moved to a new climate, and anyone who gets overwhelmed by weather details when deciding what to wear.
+- First-run onboarding.
+- Saved local location reuse.
+- Weather-based Ready Checklist generation.
+- Weather details screen.
+- Expected time away setting.
+- Routine reminder time setting.
+- Local-only clothing preferences.
+- Personalized grouped checklist categories.
+- PWA installability and service worker caching.
+- Browser notifications and Web Push foundations.
+- Persistent Supabase push subscription storage.
+- Anonymous pilot activity tracking.
+- Render deployment fallback.
+- Cloudflare Pages static/API migration work.
+- Cloudflare Worker Cron scheduled reminders.
 
-Pain point:
+The project is suitable for continued personal testing and careful pre-pilot testing. It is not yet a production system.
 
-- People often bring too much, too little, or forget the important item, such as an umbrella or jacket.
-- People may check weather apps but not translate rain probability, wind, feels-like temperature, or daily high/low into clothing decisions.
-- Morning decisions happen under time pressure, so even small ambiguity adds cognitive load.
+## Product Goal
 
-The product is intended to make weather preparation routine instead of stressful. The app should be useful because it removes interpretation work: the user should see a checklist and leave prepared.
+Ready exists to answer one practical question:
 
-## 2. Theory of Change
+> What should I wear or bring for the weather I am likely to run into today?
 
-Input:
+The product deliberately avoids feeling like a full weather dashboard. Weather details exist, but the main experience is the checklist.
 
-- User GPS location
-- Weather forecast data
-- User routine start time
-- Later, optional user feedback and personalization
+The core user problem:
 
-Activity:
+- Weather apps show numbers and probabilities.
+- Users still have to translate those numbers into clothing decisions.
+- That translation is annoying under time pressure.
+- Forgetting an umbrella, layer, or cold-weather accessory can make the day worse.
 
-- Fetch local weather.
-- Convert forecast data into simple clothing/accessory rules.
-- Present only the items the user should wear or bring.
-- Send a reminder at the user's routine start time.
+Ready's product principle:
 
-Output:
+> Ready errs on the side of practical preparedness for the time the user expects to be away from home.
 
-- A clear Ready Checklist, such as `Umbrella`, `Light jacket`, or `Gloves`.
-- A simple weather details screen for users who want context.
-- A daily notification that prompts the user to open the app.
+## Current Product State
 
-Outcome:
+### Main User Experience
 
-- The user spends less mental energy interpreting weather.
-- The user is more likely to leave with appropriate clothing/accessories.
-- The app becomes part of the user's morning routine.
+The app opens to a Ready Checklist screen. The checklist is generated from:
 
-Impact:
+- The user's saved or current device location.
+- Open-Meteo weather data.
+- The user's selected expected time away.
+- The recommendation engine.
+- Optional local clothing preferences.
 
-- Fewer stressful weather mistakes.
-- Fewer forgotten umbrellas, missing layers, or avoidable discomfort.
-- A calmer morning because one small but recurring decision is handled.
+The user can swipe or tap to a Weather Details screen for:
 
-## 3. What We Built
+- Current temperature.
+- High / low.
+- Feels-like temperature.
+- Rain chance.
+- Current precipitation.
+- Wind.
+- Conditions.
+- Last updated time.
 
-Current product summary:
+### First-Run Onboarding
 
-- A mobile-first PWA called Morning Wear.
-- A default Checklist screen titled `Ready Checklist:`.
-- A second Weather details screen.
-- Swipe/trackpad-friendly horizontal navigation between Checklist and Weather.
-- GPS-based weather fetch through Open-Meteo.
-- A 12-hour rolling forecast window for checklist recommendations.
-- Expanded clothing/accessory recommendation rules.
-- A routine start time setting stored in `localStorage`.
-- Service worker caching for PWA behavior.
-- Notification permission flow.
-- Local test notification flow.
-- Service worker notification click handling.
-- Service worker real push handling.
-- Minimal Express backend for Web Push subscription storage and scheduled reminders.
-- VAPID key setup through environment variables.
-- In-memory backend subscription store.
-- Simple scheduler that checks saved subscriptions and sends reminders at the user's saved routine start time in the user's timezone.
-- Confirmed personal iPhone testing through a temporary HTTPS tunnel:
-  - PWA installed to iPhone Home Screen.
-  - Location permission worked.
-  - Notification permission worked.
-  - Backend push notification worked on iPhone.
+New users see a setup flow before their first checklist.
 
-The notification currently says:
+Onboarding collects or confirms:
+
+- Location.
+- Usual leave / reminder time.
+- Expected time away.
+- Clothing preferences.
+- Optional reminders.
+
+Local storage key:
+
+- `readyOnboardingCompleted`
+
+Supporting in-progress key:
+
+- `readyOnboardingStarted`
+
+Existing testers are not trapped in the onboarding flow. If onboarding is missing but the device already has saved setup data, such as saved location or completed clothing preferences, the app marks onboarding complete and starts normally.
+
+Location is the only required onboarding step. Other setup steps can be skipped or defaulted.
+
+Onboarding defaults:
+
+- Routine / reminder time: `6:00 AM`
+- Expected time away: `9 hours`
+- Clothing preferences: skipped, using default grouped checklist items
+- Reminders: disabled unless the user explicitly enables them
+
+The current checklist creation/loading step is intentionally simple:
+
+- Title: `Creating your checklist`
+- Subtext: `Checking weather, layers, and accessories...`
+- A thin green CSS-only progress bar
+- No animated app icon, orbit, ring, bouncing, spinning, or flashing dot
+
+### Saved Location
+
+After successful location permission, Ready saves the last usable latitude and longitude in browser `localStorage`.
+
+Local storage key:
+
+- `readySavedLocation`
+
+Important privacy rule:
+
+- Exact location is not stored in Supabase.
+- Exact location is not sent to the backend for persistence.
+- Location is only used locally to fetch weather.
+
+On future app opens, if saved location is valid, Ready automatically generates a checklist without requiring the user to tap `Use current location` again.
+
+### Expected Time Away
+
+The app no longer uses a fixed next-12-hours checklist window for every user.
+
+Setting:
+
+- `How long will you be away from home?`
+
+Allowed values:
+
+- `3 hours`
+- `6 hours`
+- `9 hours`
+- `12 hours`
+
+Storage:
+
+- `readyExpectedTimeAwayHours` in `localStorage`
+
+Current normal fallback:
+
+- `6 hours`
+
+Onboarding default:
+
+- `9 hours`
+
+Legacy behavior:
+
+- A saved `15 hours` value is clamped down to `12 hours`.
+
+This setting controls recommendation accuracy. It is separate from routine/reminder time.
+
+### Routine Reminder Time
+
+The routine/reminder setting controls when scheduled reminders should arrive.
+
+Storage:
+
+- `morningWearRoutineStartMinutes`
+- Legacy fallback key: `morningWearWakeTimeMinutes`
+
+Default:
+
+- `6:00 AM`
+
+This setting is not used to decide the forecast window. It only controls reminder timing.
+
+### Clothing Preferences
+
+Stage A added local-only clothing preferences. Users can choose clothing they actually wear across:
+
+- Footwear
+- Pants
+- Shirts
+- Outerwear
+- Accessories
+
+Storage:
+
+- `readyClothingPreferences`
+- `readyClothingPreferencesCompleted`
+
+Completion states:
+
+- `saved`
+- `skipped`
+
+Privacy rule:
+
+- Exact clothing selections stay local.
+- They are not sent to Supabase.
+- They are not sent to Cloudflare or Render.
+- They are not included in analytics.
+
+Settings includes an `Edit clothing preferences` button. Saving preferences from Settings immediately re-renders the visible checklist if weather data is already loaded.
+
+### Personalized Grouped Checklist
+
+Stage B changed checklist display from a flat list into grouped categories.
+
+Current grouped categories:
+
+- Footwear
+- Pants
+- Shirts
+- Outerwear
+- Accessories
+
+If the user saved valid preferences:
+
+- Ready maps weather needs to selected clothing items.
+- Only compatible selected items appear when possible.
+- The checklist stays concise, usually 1-3 items per category.
+- If no selected item fits an important need, Ready first uses the closest selected same-category item with a small warning when useful.
+- If there is no same-category selection, Ready uses a default/generic fallback.
+
+If the user skipped preferences or has invalid/incomplete preferences:
+
+- Ready still uses grouped checklist layout.
+- It uses a default clothing pool.
+
+Completion rule:
+
+- Grouped checklist sections are alternatives.
+- The checklist is complete when the user checks at least one item in every visible category.
+- The old flat all-checkboxes behavior remains only as an emergency fallback.
+
+Category label rules:
+
+- Footwear, Pants, Shirts, and Outerwear use layer-weight labels only:
+  - `Light`
+  - `Light-Medium`
+  - `Medium`
+  - `Medium-Heavy`
+  - `Heavy`
+- Accessories can use purpose labels:
+  - `Rain`
+  - `Snow`
+  - `Sun`
+  - `Wind`
+  - `Cold`
+  - combined labels such as `Cold/Wind`
+
+Warning behavior:
+
+- Rain warnings are intentionally narrow.
+- Footwear can show `May not be ideal for rain.`
+- Shirts, Pants, Outerwear, and Accessories do not show broad rain mismatch warnings.
+- Accessories generally avoid unnecessary rain/sun warnings because they are already purpose-based.
+
+## Recommendation Logic
+
+The recommendation engine lives in `src/recommendation.js`.
+
+Key concepts:
+
+- `getNextForecastWindow()` selects the next N hours based on expected time away.
+- `buildWindowWeather()` summarizes the selected forecast window.
+- `createRecommendation()` converts summarized weather into checklist needs and generic fallback items.
+- `src/personalizedChecklist.js` maps those weather needs to selected/default clothing items.
+
+The recommendation logic considers:
+
+- Min/max temperature.
+- Feels-like temperature.
+- Rain chance and measurable precipitation.
+- Rain, snow, freezing rain, and weather codes.
+- Wind.
+- Cloud/sun/daylight conditions.
+- Expected time away duration.
+
+Current rain behavior:
+
+- For 3- and 6-hour windows, rain chance around 40% can trigger rain gear.
+- For 9- and 12-hour windows, rain chance around 35% can trigger rain gear.
+- Measurable rain or rain forecast codes can also trigger rain gear.
+- Longer windows are more cautious because the user has more time to get caught away from home.
+
+Important item behavior:
+
+- Rain uses `Umbrella / Rain Jacket` in generic mode.
+- Snow/freezing can add winter footwear.
+- Sun accessories appear only when bright/sunny daytime conditions occur inside the selected window.
+- Shorts/tank tops are avoided in snow/freezing/cold rain.
+- Shoes are not a default category; footwear is shown conditionally through grouped personalization/defaults.
+
+## PWA and Visual Polish
+
+The app was renamed from Morning Wear to Ready.
+
+Updated branding:
+
+- Manifest `name`: `Ready`
+- Manifest `short_name`: `Ready`
+- Apple mobile web app title: `Ready`
+- Visible app name: `Ready`
+- Checklist title remains `Ready Checklist:`
+- Notification title remains `Ready Checklist`
+
+Icon work:
+
+- The final app icon uses a dark navy rounded-square background.
+- The icon mark is a white backpack/bag outline with a teal checkmark.
+- A single source SVG is used:
+  - `icons/app-icon.svg`
+- PNG exports exist:
+  - `icons/app-icon-180.png`
+  - `icons/app-icon-192.png`
+  - `icons/app-icon-512.png`
+
+Icon references:
+
+- `index.html`
+- `manifest.webmanifest`
+- `sw.js`
+- notification icon/badge paths
+
+Loading/onboarding animation work:
+
+- Earlier animated orbit/dot treatments were removed.
+- The welcome icon is now static.
+- The checklist creation state uses a minimal horizontal progress bar.
+- Reduced-motion users receive static loading treatment.
+
+## Service Worker and Cache Behavior
+
+The service worker is `sw.js`.
+
+Current strategy:
+
+- App shell files use network-first caching.
+- Icons use cache-first behavior.
+- Old caches are deleted on activation.
+- `skipWaiting()` and `clients.claim()` are used so pilot fixes take effect faster.
+- A small update banner can prompt refresh when a new service worker version is available.
+
+Current cache version:
+
+- `welcome-icon-static`
+
+Important operational note:
+
+- Bump `APP_VERSION` in `sw.js` whenever frontend HTML/CSS/JS/icon cache behavior changes.
+- Existing installed iPhone PWAs may need to be removed and re-added for icon/name updates.
+
+## Notifications and Web Push
+
+The notification copy is intentionally unchanged:
 
 - Title: `Ready Checklist`
 - Body: `Your weather checklist is ready.`
 
-The notification intentionally does not include the full checklist yet. It opens/focuses the app, and the app generates the current Ready Checklist.
-
-## 4. Stage-by-Stage Build History
-
-### Stage 1: Initial PWA Prototype
-
-Goal:
-
-- Prove the core value: GPS location to weather data to a simple clothing/accessory recommendation.
-
-Implemented:
-
-- Static vanilla JavaScript PWA project.
-- Mobile-first homepage.
-- GPS location permission.
-- Open-Meteo weather fetch using latitude/longitude.
-- Weather normalization for current, daily, and hourly data.
-- Basic recommendation module.
-- Clear error states for denied location and failed weather fetch.
-
-Changed from previous stage:
-
-- This was the first working slice from an empty directory.
-
-Learned:
-
-- The core product value could be demonstrated without accounts, a backend, or notifications.
-- Separating weather fetch logic from recommendation logic was important immediately.
-
-### Stage 2: Checklist UI
-
-Goal:
-
-- Turn the recommendation from a single headline into a checklist-style homepage.
-
-Implemented:
-
-- Checklist title.
-- Checkbox rows for recommended items.
-- Completion state with a large check mark when every item is checked.
-- Removed weather facts from the checklist box.
-
-Changed from previous stage:
-
-- The main screen became action-oriented instead of information-oriented.
-
-Learned:
-
-- The checklist format better matched the product goal: prepare before leaving.
-- The UI should focus on what the user should do, not all the weather facts.
-
-### Stage 3: Two-Screen UI
-
-Goal:
-
-- Keep the homepage focused on the checklist while still making weather details available.
-
-Implemented:
-
-- Checklist screen as default.
-- Weather details screen.
-- Weather details included large temperature, high/low, feels-like, rain, wind, conditions, and last updated.
-- Navigation by buttons and later horizontal scroll/swipe.
-- Centered/spacious weather screen while preserving the checklist-first homepage.
-
-Changed from previous stage:
-
-- Weather facts moved out of the main checklist card.
-- The app became a two-screen mobile experience.
-
-Learned:
-
-- Product hierarchy matters: weather details are secondary.
-- The app should feel like a utility, not a full weather dashboard.
-- Swipe navigation improved the mobile feel, but visual changes to the checklist screen needed careful control.
-
-### Stage 4: Expanded Recommendation Rules
-
-Goal:
-
-- Make the checklist more useful with a wider set of clothing/accessory items.
-
-Implemented:
-
-- Added items such as:
-  - Umbrella
-  - Light jacket
-  - Heavy coat
-  - Sweatshirt
-  - Sweatpants
-  - Scarf
-  - Beanie
-  - Gloves
-  - Rain boots or waterproof shoes
-  - Sunglasses or hat
-  - Wind-resistant layer
-  - Light clothing
-- Better combinations for cold, rain, wind, snow, and heat.
-- Conflict handling to avoid strange combinations like heavy coat plus light jacket.
-
-Changed from previous stage:
-
-- Recommendation logic became a real rules module rather than a tiny demo.
-
-Learned:
-
-- Clothing rules need to consider combinations, not single weather conditions.
-- Decisive advice is more useful than vague advice.
-- Sun-related recommendations need special handling because clear night skies are not a reason to bring sunglasses.
-
-### Stage 5: Time-Period Logic Exploration
-
-Goal:
-
-- Explore time-aware recommendations based on parts of the day.
-
-Implemented / attempted:
-
-- Morning / Afternoon / Evening / Midnight periods.
-- Later revised to Morning / Afternoon / Night.
-- Custom routine start time that shifted period schedules.
-- Forecast-window aggregation for selected periods.
-
-Changed from previous stage:
-
-- Checklist logic moved from current/daily weather toward hourly forecast windows.
-
-Learned:
-
-- Named periods created product confusion.
-- If a user starts their day at 2:00 PM, calling that "Morning" is wrong.
-- Even a revised Morning/Afternoon/Night model created edge cases.
-- The product did not need named periods to answer the user problem.
-
-### Stage 5 Revamp: Rolling Ready Checklist
-
-Goal:
-
-- Replace named periods with one rolling checklist based on the next 12 hours.
-
-Implemented:
-
-- Checklist title became `Ready Checklist:`.
-- Removed Morning/Afternoon/Night checklist labels.
-- Added `getNextForecastWindow()`.
-- Added `buildWindowWeather()`.
-- Checklist now uses the next 12 hours of hourly forecast data.
-- Routine start time remains as a saved setting for notifications only.
-- Sun protection logic now checks actual daylight-relevant hours in the 12-hour window.
-
-Changed from previous stage:
-
-- Product model became simpler and more truthful.
-- Time labels no longer drive recommendation logic.
-
-Learned:
-
-- Rolling windows better match the core user question: "What do I need to be prepared for the next part of my day?"
-- Product logic should not be over-labeled if a simpler time window solves the problem.
-- Routine start time is a notification/scheduling concept, not a checklist naming concept.
-
-### Stage 6A: Notification Readiness and Test Notifications
-
-Goal:
-
-- Prepare the PWA for notifications and add a test notification flow.
-
-Implemented:
-
-- Notification settings section.
-- Notification support/permission state display.
-- Permission request from a direct user action.
-- Local test notification through the service worker registration.
-- Service worker notification click handling to open/focus the app.
-- Notification copy separated from browser delivery logic.
-
-Changed from previous stage:
-
-- The app could request permission and send a simple test notification.
-- No backend scheduling yet.
-
-Learned:
-
-- On iPhone, Web Push requires Home Screen installation and HTTPS.
-- Permission must be requested from a direct user action.
-- Keep notification message/timing logic separate from the delivery method so it can be reused later.
-
-### Stage 6B: Real Scheduled PWA Push Notifications
-
-Goal:
-
-- Add backend foundation for real scheduled Web Push reminders.
-
-Implemented:
-
-- `package.json` with Express/Web Push dependencies.
-- Express backend in `server/index.js`.
-- VAPID environment variables:
-  - `VAPID_PUBLIC_KEY`
-  - `VAPID_PRIVATE_KEY`
-  - `VAPID_SUBJECT`
-- `/api/push/public-key`.
-- `/api/push/subscriptions`.
-- `/api/push/test`.
-- `/api/health`.
-- In-memory subscription store.
-- Scheduler that checks routine start time in the user's saved timezone.
-- Service worker `push` event handler.
-- README instructions for setup, VAPID keys, local testing, deployment notes, and iPhone limitations.
-
-Changed from previous stage:
-
-- Notifications moved from local test only to real Web Push delivery.
-- The frontend can now save a push subscription to the backend.
-- The backend can send immediate test pushes and scheduled reminders.
-
-Learned:
-
-- Real scheduled notifications require a backend because the browser cannot wake itself reliably at a future time.
-- Local success is not the same as iPhone PWA success.
-- The backend is useful but not production-ready until subscriptions survive server restarts.
-
-### Stage 7A: Personal iPhone PWA Notification Testing
-
-Goal:
-
-- Test the current PWA push system on the product manager/director's own iPhone before any broader pilot.
-
-Implemented:
-
-- No new product features.
-- Testing plan recommended temporary HTTPS tunnel for fastest personal testing.
-- Cloudflare Tunnel was used/recommended for exposing local Express server over HTTPS.
-
-Confirmed:
-
-- PWA could be opened via HTTPS tunnel.
-- PWA could be installed on iPhone Home Screen.
-- Location permission worked on iPhone.
-- Notification permission worked on iPhone.
-- Backend push worked on iPhone.
-
-Changed from previous stage:
-
-- No code changes were needed for the reported successful tunnel test.
-
-Learned:
-
-- iPhone PWA testing must be done from the Home Screen app, not just Safari.
-- HTTPS tunnel is good for personal validation.
-- Tunnel testing is not pilot-ready because the laptop/tunnel must stay awake and the in-memory store disappears on restart.
-
-## 5. Major Product Decisions
-
-### PWA Instead of Native iOS App For Now
-
-Decision:
-
-- Build as a PWA first.
-
-Why:
-
-- Faster to prototype.
-- Avoids App Store approval and native iOS complexity.
-- Web Push on iOS Home Screen PWAs can support the notification behavior needed for the MVP.
-
-Tradeoff:
-
-- iPhone push requires HTTPS, Home Screen installation, and iOS support.
-- Some native-like behavior is more fragile than an App Store app.
-
-### Checklist Instead of Full Weather App
-
-Decision:
-
-- The primary surface is a checklist, not a weather dashboard.
-
-Why:
-
-- The PRD explicitly says weather apps already show information, but users need practical advice.
-- The checklist reduces cognitive load by turning data into action.
-
-Tradeoff:
-
-- Users who want rich weather details need a secondary screen.
-
-### Second Weather Screen Instead of Weather Clutter on Homepage
-
-Decision:
-
-- Keep weather facts off the checklist screen.
-
-Why:
-
-- The homepage should answer "what should I wear/bring?" quickly.
-- Details are still available for trust and context.
-
-Tradeoff:
-
-- More UI/navigation complexity than a single screen.
-
-### Rolling 12-Hour Ready Checklist Instead of Named Time Periods
-
-Decision:
-
-- Use one `Ready Checklist:` based on the next 12 hours.
-
-Why:
-
-- Morning/Afternoon/Night labels created confusing edge cases.
-- The user problem is preparation for the upcoming window, not labeling the day.
-
-Tradeoff:
-
-- Less semantic framing, but much simpler and more reliable.
-
-### Simple Notification Copy Instead of Full Checklist in Notification
-
-Decision:
-
-- Notification only says the checklist is ready.
-
-Why:
-
-- Keeps push payload simple.
-- Avoids stale checklist contents.
-- Encourages opening the app, where the latest weather can be fetched and interpreted.
-
-Tradeoff:
-
-- Notification is less informative by itself.
-
-### Routine Start Time Stored for Notification Timing
-
-Decision:
-
-- Routine start time does not change checklist naming/logic.
-- It only controls scheduled reminder timing.
-
-Why:
-
-- Routine time is a habit/reminder concept.
-- Checklist logic should remain based on the next 12 hours from now.
-
-Tradeoff:
-
-- The setting may feel less useful until scheduled reminders are fully production-ready.
-
-## 6. Bugs, Problems, and Fixes
-
-### Service Worker / Browser Caching Made Changes Not Appear
-
-What happened:
-
-- UI and service worker updates sometimes did not appear immediately in the browser.
-
-Why it happened:
-
-- Service workers cache app shell files and can serve stale versions during development.
-
-Fix / mitigation:
-
-- Bumped service worker cache names when app shell changed.
-- Used hard refresh / service worker unregister guidance during testing.
-
-Rule to remember:
-
-- Service workers can cache stale files during development. After UI/service worker changes, hard refresh, unregister, or bump cache names.
-
-### npm / package.json Confusion Early On
-
-What happened:
-
-- The project initially had a minimal `package-lock.json` but no real `package.json`.
-
-Why it happened:
-
-- The app started as static frontend files, then later needed Node dependencies for the backend.
-
-Fix / mitigation:
-
-- Added `package.json`, installed dependencies, and updated `package-lock.json`.
-
-Rule to remember:
-
-- Once backend dependencies are introduced, create and maintain a clear `package.json` and lockfile.
-
-### Safari / iPhone Notification Permissions
-
-What happened:
-
-- iPhone notification testing needed more than local browser success.
-
-Why it happened:
-
-- iOS Web Push works for Home Screen web apps on HTTPS and requires permission from a direct user action.
-
-Fix / mitigation:
-
-- Added iPhone/PWA notes.
-- Tested through HTTPS tunnel and Home Screen installation.
-
-Rule to remember:
-
-- For PWA notifications on iPhone, test from the Home Screen app over HTTPS. Safari tab testing is not enough.
-
-### Midnight / Night Checklist Recommended Sunglasses or Hat
-
-What happened:
-
-- Earlier period-based logic could recommend `Sunglasses or hat` for a Midnight/Night checklist if skies were clear and warm.
-
-Why it happened:
-
-- Sun logic used weather condition codes without enough awareness of actual daylight hours.
-
-Fix / mitigation:
-
-- First made sun recommendations period-aware.
-- Later replaced named periods and made sun logic depend on daylight-relevant hours inside the next 12-hour forecast window.
-
-Rule to remember:
-
-- Recommendations tied to daylight must check daylight hours, not just "clear" weather codes.
-
-### Period-Based Checklist Labels Created Weird Edge Cases
-
-What happened:
-
-- Custom routine start time could make 2:00 PM become "Morning" or create awkward Morning/Afternoon/Night schedules.
-
-Why it happened:
-
-- The model treated user routine time as a period anchor instead of focusing on the actual upcoming weather window.
-
-Fix / mitigation:
-
-- Removed named checklist periods.
-- Replaced them with the rolling `Ready Checklist:` based on the next 12 hours.
-
-Rule to remember:
-
-- Avoid over-labeled product logic if a rolling window solves the user problem better.
-
-### In-Memory Backend Storage Disappears After Server Restart
-
-What happened:
-
-- Push subscriptions are stored only in process memory.
-
-Why it happened:
-
-- This was intentionally built as a proof-of-concept backend.
-
-Fix / mitigation:
-
-- README and this post-mortem clearly mark this as not production-ready.
-- Next recommended step is persistent storage.
-
-Rule to remember:
-
-- In-memory storage is acceptable for proof of concept only. Do not invite testers until subscriptions survive restarts.
-
-### Local Testing vs Real iPhone HTTPS/Home Screen Requirements
-
-What happened:
-
-- Local backend push can work on desktop, but iPhone PWA push has stricter conditions.
-
-Why it happened:
-
-- iOS requires installed Home Screen PWA plus HTTPS for Web Push.
-
-Fix / mitigation:
-
-- Stage 7A used a temporary HTTPS tunnel and Home Screen install.
-
-Rule to remember:
-
-- Do not trust local success as pilot readiness. Test on the real target device in the real launch mode.
-
-### Scheduler Timing Is Still Naive
-
-What happened:
-
-- The scheduler checks subscriptions on an interval and sends when the local minute exactly equals the saved routine start minute.
-
-Why it happened:
-
-- This was the simplest proof-of-concept scheduler.
-
-Fix / mitigation:
-
-- It works for basic testing, but production needs a more durable scheduler and probably a grace window.
-
-Rule to remember:
-
-- Time-based systems need durable scheduling, missed-run handling, and persistence before pilots.
-
-## 7. Current Architecture
-
-### Frontend / PWA
-
-Files:
-
-- `index.html`
-- `styles.css`
-- `src/app.js`
-- `manifest.webmanifest`
-
-Responsibilities:
-
-- Render mobile-first app shell.
-- Handle GPS request.
-- Fetch weather.
-- Render Ready Checklist and Weather details screens.
-- Save routine start time in `localStorage`.
-- Request notification permission.
-- Subscribe to backend push reminders.
-
-### Location
-
-File:
-
-- `src/location.js`
-
-Responsibilities:
-
-- Validate secure context.
-- Request GPS via `navigator.geolocation`.
-- Convert browser geolocation failures into clear app errors.
-
-### Weather API
-
-File:
-
-- `src/weather.js`
-
-Source:
-
-- Open-Meteo API.
-
-Fetched fields:
-
-- Current temperature, feels-like, precipitation, rain, showers, snowfall, weather code, wind.
-- Daily weather code, high, low, precipitation probability, max wind.
-- Hourly temperature, feels-like, precipitation probability, precipitation, rain, showers, snowfall, weather code, wind.
-
-Important:
-
-- `forecast_days` is `2`, which supports next-12-hour windows that cross midnight.
-
-### Recommendation Logic
-
-File:
-
-- `src/recommendation.js`
-
-Responsibilities:
-
-- Build next-12-hour forecast window.
-- Aggregate weather facts over that window.
-- Convert weather into checklist items.
-- Avoid conflicting items.
-- Limit checklist size.
-- Only recommend sun protection when daylight-relevant hours justify it.
-
-### Notification Helpers
-
-Files:
+Frontend notification modules:
 
 - `src/notifications.js`
 - `src/reminders.js`
 
-Responsibilities:
+The app supports:
 
-- Detect browser notification support.
-- Request notification permission.
-- Send Stage 6A local test notification.
-- Fetch VAPID public key.
-- Subscribe with `pushManager`.
-- POST push subscription to backend.
-- Keep reminder copy reusable and separate from browser delivery.
+- Browser notification capability detection.
+- iPhone Home Screen PWA notification guidance.
+- Notification permission request.
+- Local test notification.
+- Push subscription creation.
+- Push subscription sync to backend.
+- Notification click tracking.
 
-### Service Worker
+The service worker handles:
 
-File:
+- Push events.
+- Notification display.
+- Notification click focus/open behavior.
 
-- `sw.js`
-
-Responsibilities:
-
-- Cache app shell.
-- Serve cached GET requests when available.
-- Handle local/test notification clicks.
-- Handle real `push` events.
-- Open or focus app on notification click.
-
-Current cache:
-
-- `morning-wear-v3`
+## Backend and Persistence
 
 ### Express Backend
 
-Files:
+The Express backend lives in `server/`.
+
+It handles:
+
+- Static PWA serving.
+- `/api/health`
+- `/api/push/public-key`
+- `/api/push/subscriptions`
+- `/api/push/test`
+- `/api/pilot-events`
+- optional local/Render scheduled reminder loop
+
+Important files:
 
 - `server/index.js`
+- `server/subscriptionStore.js`
+- `server/pilotEventStore.js`
 - `server/pushService.js`
 - `server/scheduler.js`
-- `server/subscriptionStore.js`
 - `server/time.js`
 
-Responsibilities:
+### Supabase Storage
 
-- Serve the PWA.
-- Provide `/api/health`.
-- Provide `/api/push/public-key`.
-- Receive and store push subscriptions.
-- Send backend test pushes.
-- Run scheduled reminder checks.
-- Store subscription metadata in memory.
+Stage 7B replaced in-memory push subscription storage with Supabase/Postgres.
 
-### Web Push / VAPID
+Persisted push subscription fields:
 
-Dependency:
+- `id`
+- push subscription JSON
+- routine start time in minutes
+- timezone
+- last sent date
+- created timestamp
+- updated timestamp
 
-- `web-push`
+Privacy rule:
 
-Environment variables:
+- Do not persist exact location.
+- Do not persist clothing preferences.
+- Do not add accounts/auth yet.
 
-- `VAPID_PUBLIC_KEY`
-- `VAPID_PRIVATE_KEY`
-- `VAPID_SUBJECT`
+The backend uses the Supabase service role key only server-side. It must never appear in frontend JavaScript.
 
-Reminder payload:
+### Reminder Update Rule
 
-- Title: `Ready Checklist`
-- Body: `Your weather checklist is ready.`
+The reminder storage layer handles same-day schedule changes:
 
-### Scheduler
+- If routine time changes, `last_sent_date` resets to `null`.
+- If timezone changes, `last_sent_date` resets to `null`.
+- If the same routine time/timezone is re-saved, `last_sent_date` is preserved.
 
-File:
+This lets a user change their reminder time and receive a new same-day reminder without allowing duplicate reminders from repeated saves.
 
-- `server/scheduler.js`
+## Pilot Analytics
 
-Behavior:
+Pilot analytics are intentionally minimal.
 
-- Runs every `SCHEDULER_INTERVAL_MS`.
-- For each subscription:
-  - Converts server time into the user's saved timezone.
-  - Compares local minute-of-day to routine start time.
-  - Sends one reminder per local date.
+Stored table:
 
-### In-Memory Subscription Store
+- `pilot_events`
 
-File:
+Tracked event types:
 
-- `server/subscriptionStore.js`
+- `app_opened`
+- `checklist_generated`
+- `checklist_completed`
+- `reminders_enabled`
+- `notification_clicked`
+- `weather_screen_viewed`
+- `location_updated`
 
-Stores:
+Privacy rules:
 
-- Push subscription
-- Routine start minutes
-- Timezone
-- Optional location
-- Created/updated timestamps
-- Last sent local date
+- Anonymous device id only.
+- No names.
+- No emails.
+- No exact location.
+- No exact clothing preferences.
+- No accounts.
 
-Important:
+`checklist_generated` can include:
 
-- This data disappears when the server restarts.
+- `expected_time_away_hours`
+- `has_clothing_preferences`
+- `personalized_checklist`
 
-## 8. Current Limitations
+Analytics failures are soft. They should never break checklist generation.
 
-The app is not production-ready yet.
+## Deployment Work
 
-Known limitations:
+### Render
 
-- Push subscriptions are stored in memory and disappear after server restart.
-- Laptop/tunnel testing is temporary.
-- Cloudflare/ngrok tunnel URLs may change.
-- Free hosting may sleep, which can break scheduled reminders.
-- No database yet.
-- No account/user identity model yet.
-- No real privacy policy or consent language yet.
-- Location is optionally saved by the backend, but privacy handling is not pilot-ready.
-- No pilot feedback form or feedback pipeline yet.
-- Clothing recommendations need real-user validation.
-- iPhone testing requires HTTPS and Home Screen PWA installation.
-- Scheduler is simple and may miss reminders if the server is asleep or down at the exact minute.
-- No automated test suite beyond syntax checks and manual behavior checks.
-- No unsubscribe UI yet.
-- No subscription cleanup dashboard beyond backend logic for expired push endpoints.
-- Notifications do not include checklist items yet by design.
-- Weather rules are generic and not personalized.
+Stage 7C prepared and tested Render deployment for personal iPhone testing.
 
-What works locally:
+Render role:
 
-- Express server serves frontend and backend.
-- Open-Meteo weather fetch works.
-- Ready Checklist generation works.
-- Weather details screen works.
-- Local test notifications work where supported.
-- Backend push test endpoint works with stored subscriptions.
-- Scheduler works while server is running and subscription store is populated.
+- Serves the PWA and Express API.
+- Works as fallback during Cloudflare migration.
 
-What worked on personal iPhone via tunnel:
+Free-tier limitation:
 
-- HTTPS tunnel access.
-- Home Screen PWA installation.
-- Location permission.
-- Notification permission.
-- Backend push delivery to iPhone.
+- Render Free can sleep.
+- Sleeping can cause missed scheduled reminders.
 
-What still needs deployment/persistent storage:
+Scheduler control:
 
-- Stable HTTPS URL.
-- Persistent push subscription database.
-- Scheduled reminders surviving deploy/restart/server sleep.
-- Tester-ready privacy/consent copy.
-- Pilot feedback loop.
-
-## 9. Pilot Readiness Checklist
-
-Before inviting 5-10 testers:
-
-- Deploy over stable HTTPS.
-- Add persistent storage for push subscriptions and routine settings.
-- Confirm scheduled notifications survive server restart.
-- Confirm scheduled notifications survive deploy.
-- Add unsubscribe/disable reminder path.
-- Add basic consent/privacy copy.
-- Decide exactly what location data is stored and why.
-- Write tester instructions for iPhone Home Screen install.
-- Create a feedback form.
-- Test with one external user first.
-- Define stop/go criteria for expanding from 1 tester to 5-10 testers.
-- Confirm notification delivery across at least two different iPhones if possible.
-- Confirm behavior when notification permission is denied.
-- Confirm behavior when location permission is denied.
-- Confirm behavior when backend is unavailable.
-- Confirm that old service worker versions do not confuse testers.
-
-Suggested stop/go criteria:
-
-- Go to 5-10 testers only if:
-  - One external tester can install the PWA without hand-holding.
-  - Notification permission can be granted from the Home Screen app.
-  - A scheduled notification arrives at the expected time after a server restart.
-  - The user understands the checklist within 5 seconds.
-  - The app has a clear privacy/consent explanation.
-
-## 10. Recommended Next Steps
-
-1. Add persistent storage.
-
-   Recommended scope:
-
-   - Start with a simple hosted database or SQLite for local proof of concept.
-   - Store subscription endpoint/key payload, routine start time, timezone, optional location, and last sent date.
-   - Preserve the current in-memory API shape as much as possible.
-
-2. Deploy to stable HTTPS.
-
-   Recommended target:
-
-   - Render or a similar beginner-friendly Node host.
-   - Ensure `HOST=0.0.0.0` in deployment.
-   - Add VAPID environment variables.
-   - Confirm service worker and push APIs work from the deployed URL.
-
-3. Add consent/privacy copy.
-
-   Required before testers:
-
-   - Explain location use.
-   - Explain push subscription storage.
-   - Explain routine start time storage.
-   - Explain that the app is experimental.
-
-4. Write tester instructions.
-
-   Include:
-
-   - Open deployed URL in Safari.
-   - Add to Home Screen.
-   - Open from Home Screen.
-   - Tap Settings.
-   - Enable reminders.
-   - Allow notifications.
-   - Use current location.
-   - What feedback to send.
-
-5. Run one-person external test before 5-10 person pilot.
-
-   Goal:
-
-   - Validate installation, permission flow, scheduled reminder, and checklist comprehension with someone not involved in the build.
-
-## 11. rules.md Additions
-
-Copy these into `rules.md` or an equivalent project rules file:
-
-```md
-# Morning Wear Development Rules
-
-- Always test one layer at a time: weather fetch, recommendation logic, UI, service worker, browser notification, backend push, scheduler, deployment.
-- Keep product logic separate from delivery method. Recommendation rules should not depend on whether delivery is UI, local notification, backend push, or future native app.
-- Do not add new features before validating the previous stage on the target device.
-- Service workers can cache stale files during development. After app shell or service worker changes, hard refresh, unregister the service worker, or bump the cache version.
-- For PWA notifications on iPhone, test from the Home Screen app over HTTPS. Safari-tab success is not enough.
-- Do not trust local success as pilot readiness. Confirm behavior on the real target device and deployment mode.
-- Keep notifications simple until the habit is validated. A notification can say the checklist is ready; the app can generate the detailed checklist.
-- Avoid over-labeled product logic if rolling windows solve the user problem better.
-- Routine start time is a notification scheduling setting, not checklist naming logic.
-- Save working states with Git before major changes or conceptual refactors.
-- After every bug fix, record the cause, fix, and prevention rule.
-- Keep the checklist screen focused on action items. Weather facts belong on the Weather details screen.
-- Store the least personal data possible. Treat location and push subscriptions as sensitive.
-- In-memory storage is only for proof of concept. Do not invite testers until critical data survives restarts.
-- If a feature touches iPhone PWA behavior, verify Home Screen install, HTTPS, service worker state, and notification permission.
-- Prefer small, reversible implementation stages over broad rewrites.
-```
-
-## 12. Open Questions
-
-Product questions:
-
-- What data should we persist for pilot users?
-- How much location data should be stored, if any?
-- Should location be stored as exact coordinates, rounded coordinates, or not stored at all?
-- Should notifications eventually include checklist items?
-- Should users be able to edit recommendation sensitivity, such as "I get cold easily"?
-- How accurate are the clothing recommendations for real people in different climates?
-- What feedback mechanism should the pilot use?
-- What is the minimum success metric for the first 5-10 testers?
-- Should the app support children/family checklists later?
-- Should the app send updated reminders later in the day, or only routine-start reminders?
-
-Technical questions:
-
-- Which hosting platform should be used for the first pilot?
-- Which persistent storage option is simplest and safest?
-- Should push subscriptions be tied to an anonymous device ID?
-- How should users unsubscribe or delete their stored data?
-- Should scheduler logic include a grace window to avoid missed reminders?
-- How should failed push sends be retried?
-- How often should stale subscriptions be cleaned up?
-- Should service worker cache behavior be adjusted for easier development?
-- Should the frontend show backend reminder sync status more explicitly?
-- How should local/tunnel testing be separated from deployed pilot configuration?
-
-## 13. New Codex Chat Handoff
-
-Paste this into a new Codex chat:
-
-```md
-We are continuing the Morning Wear / Impact Corps PWA.
-
-Product goal:
-Reduce morning decision stress by turning weather data into a simple Ready Checklist for what to wear or bring. The app is for busy people, originally framed around a parent/mom getting ready under time pressure. The product should reduce cognitive load, not become a full weather app.
-
-Current product state:
-- Vanilla JS mobile-first PWA.
-- Checklist screen titled "Ready Checklist:".
+- `ENABLE_EXPRESS_SCHEDULER=true` enables Express scheduler.
+- `ENABLE_EXPRESS_SCHEDULER=false` disables Express scheduler.
+
+This flag is critical to avoid duplicate reminders when Cloudflare Worker Cron is active.
+
+### Cloudflare Worker Cron
+
+The reminder scheduler Worker lives in:
+
+- `workers/reminder-scheduler/`
+
+Purpose:
+
+- Move scheduled reminder delivery off Render Free.
+- Run every 5 minutes via Cloudflare Cron Trigger.
+- Read Supabase subscriptions.
+- Determine due reminders using timezone and routine start time.
+- Skip reminders already sent for the user's local date.
+- Send Web Push.
+- Update `last_sent_date`.
+- Remove expired subscriptions on 404/410 when possible.
+
+The Worker uses:
+
+- `@block65/webcrypto-web-push`
+
+Reason:
+
+- The Node `web-push` package is not Cloudflare Worker safe.
+- Worker Web Push must use Web Crypto compatible APIs.
+
+Safe handoff order:
+
+1. Deploy Worker with `DRY_RUN=true`.
+2. Verify Supabase reads and due-reminder detection.
+3. Set Render `ENABLE_EXPRESS_SCHEDULER=false`.
+4. Confirm Render logs show the scheduler is disabled.
+5. Set Worker `DRY_RUN=false`.
+
+### Cloudflare Pages CF-2
+
+CF-2 added a clean static export for Cloudflare Pages.
+
+Script:
+
+- `npm run build:pages`
+
+Build script:
+
+- `scripts/build-pages.js`
+
+Output:
+
+- `dist/`
+
+Only frontend assets are copied:
+
+- `index.html`
+- `styles.css`
+- `src/`
+- `icons/`
+- `manifest.webmanifest`
+- `sw.js`
+
+Backend/server/secrets are intentionally not copied.
+
+### Cloudflare Pages CF-3
+
+CF-3 moved API behavior to Cloudflare Pages Functions.
+
+Functions:
+
+- `functions/api/health.js`
+- `functions/api/push/public-key.js`
+- `functions/api/push/subscriptions.js`
+- `functions/api/push/test.js`
+- `functions/api/pilot-events.js`
+
+Shared helpers:
+
+- `functions/_shared/backend.js`
+
+Important compatibility decision:
+
+- Pages Functions use native `fetch` to call Supabase REST.
+- Pages Functions do not import `@supabase/supabase-js`.
+- Pages Functions do not import Node-only `web-push`.
+- This avoids `node:stream`, `node:crypto`, Buffer, and Node polyfill issues.
+
+Current Cloudflare Pages test push limitation:
+
+- `POST /api/push/test` returns `501`.
+- Scheduled push is handled by the separate Cron Worker.
+
+## Testing and Verification
+
+Current scripts:
+
+- `npm run check`
+- `npm run build:pages`
+- `npm run test:recommendations`
+
+`npm run check` syntax-checks:
+
+- Express server files.
+- frontend modules.
+- recommendation tests.
+- personalized checklist tests.
+- Cloudflare Pages Functions.
+- Cloudflare Worker scheduler.
+- service worker.
+
+Recommendation tests cover:
+
+- Time-away windows.
+- Rain later in the selected window.
+- Rain thresholds.
+- Hot/sunny weather.
+- Mild weather.
+- Cloudy/windy weather.
+- Snow/freezing behavior.
+- Grouped personalized checklist examples.
+- Warning behavior.
+- Default/skipped preference behavior.
+
+Manual tests that have been confirmed over the project:
+
+- Local Ready Checklist generation.
 - Weather details screen.
-- Swipe/scroll navigation between Checklist and Weather.
-- GPS location permission.
-- Open-Meteo weather fetch.
-- Checklist recommendations use the next 12 hours of hourly forecast data.
-- Routine start time setting is stored locally and used for notification timing, not checklist naming.
-- Notification permission flow exists.
-- Local Stage 6A test notification works.
-- Real Stage 6B Web Push backend exists.
-- Service worker handles push events and notification clicks.
-- Express backend serves frontend and push APIs.
-- Backend stores subscriptions in memory.
-- Backend scheduler sends "Ready Checklist / Your weather checklist is ready." at saved routine start time.
+- Routine start time setting.
+- Test notifications.
+- Backend Web Push locally.
+- Scheduled reminders locally.
+- Supabase persistence across server restart.
+- iPhone Home Screen PWA through Cloudflare Tunnel.
+- iPhone location permission.
+- iPhone notification permission.
+- Backend push reaching iPhone through tunnel.
+- Render deployment.
+- Cloudflare Pages deploy after CF-2/CF-3 fixes.
 
-Current architecture:
-- Frontend/PWA: `index.html`, `styles.css`, `src/app.js`, `manifest.webmanifest`.
-- Weather: `src/weather.js`.
-- Location: `src/location.js`.
-- Recommendation rules: `src/recommendation.js`.
-- Notification helpers: `src/notifications.js`, `src/reminders.js`.
-- Service worker: `sw.js`.
-- Backend: `server/index.js`, `server/pushService.js`, `server/scheduler.js`, `server/subscriptionStore.js`, `server/time.js`.
-- Config: `src/config.js`, `.env.example`, `package.json`.
+Manual tests still important after latest visual/onboarding changes:
 
-Confirmed tests:
-- `npm install` works.
-- `npm run check` passes.
-- `git diff --check` passed at Stage 6B.
-- Express server boots locally.
-- `/api/health` works locally.
-- VAPID key generation works.
-- Local Ready Checklist works.
-- Local test notifications work where supported.
-- Scheduled backend push reminders work locally while the server is running.
-- Stage 7A personal iPhone tunnel test succeeded: HTTPS tunnel, Home Screen PWA install, location permission, notification permission, and backend push on iPhone all worked.
+- Clear localStorage and confirm first-run onboarding.
+- Confirm static welcome icon.
+- Confirm no orbit/dot/ring animation.
+- Confirm progress-bar checklist creation state.
+- Confirm final checklist renders.
+- Confirm Settings still edits preferences/time/reminders.
+- Confirm iPhone Home Screen PWA layout.
 
-Known limitations:
-- Push subscriptions are stored in memory and disappear after server restart.
-- No database yet.
-- No accounts or device identity model yet.
-- No unsubscribe/delete data UI yet.
-- No privacy/consent copy ready for testers.
-- Laptop/tunnel testing is temporary.
-- Free hosting may sleep, which can break scheduled reminders.
-- iPhone PWA push requires HTTPS and Home Screen installation.
-- Scheduler is simple and may miss reminders if the server is asleep/down at the exact minute.
-- Recommendation rules need real-user validation.
+## Important Bugs Fixed
 
-Immediate next task:
-Add persistent storage for push subscriptions/routine settings so scheduled reminders survive server restart. Keep the current API shape if possible. Do not add accounts yet unless absolutely necessary.
+### In-memory Subscription Loss
 
-Constraints / do-not-change list:
-- Do not change Ready Checklist recommendation logic unless necessary.
-- Do not change the weather API unless necessary.
-- Do not change swipe layout or weather details screen.
-- Do not change notification copy unless necessary.
-- Do not add native iOS, Capacitor, APNs native app code, Firebase native SDKs, or App Store-specific code.
-- Keep it a pure PWA.
-- Keep product logic separate from notification delivery.
-- Preserve Stage 6A local test notification flow.
+Problem:
 
-How to work with me:
-- Treat me as the product manager/director.
-- Plan first before coding.
-- Explain tradeoffs clearly.
-- Do one stage at a time.
-- Avoid overbuilding.
-- Validate each layer before moving on.
-- After bugs, explain cause, fix, and prevention.
+- Push subscriptions were originally stored in memory.
+- Server restart erased subscriptions.
+
+Fix:
+
+- Supabase persistent storage.
+
+### Render Scheduler Sleep
+
+Problem:
+
+- Render Free can sleep.
+- Express interval scheduler can miss reminder times.
+
+Fix:
+
+- Cloudflare Worker Cron scheduler.
+- Express scheduler can be disabled with `ENABLE_EXPRESS_SCHEDULER=false`.
+
+### Duplicate Reminder Risk
+
+Problem:
+
+- Render scheduler and Worker scheduler could both send reminders.
+
+Fix:
+
+- Explicit scheduler handoff order.
+- `ENABLE_EXPRESS_SCHEDULER=false`.
+- Worker `DRY_RUN` safety mode.
+
+### Same-Day Reminder Time Change
+
+Problem:
+
+- If a reminder had already been sent today, changing reminder time did not allow a new same-day reminder.
+
+Fix:
+
+- Reset `last_sent_date` to `null` when routine time or timezone changes.
+
+### Cloudflare Pages Function Syntax Errors
+
+Problems:
+
+- Broken comment/text in `functions/_shared/backend.js`.
+- Broken multiline string.
+- `npm run check` did not originally cover all Functions files.
+
+Fix:
+
+- Fixed syntax.
+- Expanded check script to include Functions.
+
+### Node-only Imports in Pages Functions
+
+Problem:
+
+- Pages Functions bundle tried to import `node:stream`.
+
+Fix:
+
+- Removed Node-only dependencies from Pages Functions.
+- Used native fetch/Supabase REST for Pages Functions.
+- Disabled Pages test push with 501 until Worker-safe test push is implemented.
+
+### Cloudflare Env Debugging
+
+Problem:
+
+- Production `/api/health` showed missing env config.
+
+Fix:
+
+- Added safe boolean env diagnostics to `/api/health`.
+- No secret values are returned.
+
+### Service Worker Staleness
+
+Problem:
+
+- Deployed app once required manual cache clearing before buttons worked.
+
+Fix:
+
+- Explicit cache versioning.
+- Old cache cleanup.
+- Network-first app shell.
+- Update banner.
+- Frequent `APP_VERSION` bumps after frontend changes.
+
+### Home Screen Icon Mismatch
+
+Problem:
+
+- iPhone PWA icon and in-app icon did not match.
+- Earlier icon versions had unwanted background treatments.
+
+Fix:
+
+- Single source SVG.
+- PNG exports from same design.
+- References aligned across manifest, apple touch icon, in-app icon, notification icon/badge.
+
+### Overbroad Rain Warnings
+
+Problem:
+
+- Rain mismatch warnings appeared across many categories.
+
+Fix:
+
+- Rain warnings are now limited to Footwear closest-match cases.
+
+### Loading/Welcome Animation Polish
+
+Problem:
+
+- App icon loading/welcome animations felt busy or broken.
+
+Fix:
+
+- Checklist creation uses a simple progress bar.
+- Welcome icon is static.
+- Orbit/ring/dot animations were removed from the welcome icon.
+
+## Key Product Decisions
+
+### Checklist First
+
+The app should answer what to wear/bring before showing weather facts.
+
+### Weather Details Are Secondary
+
+The Weather screen exists for trust and context, but it is not the primary experience.
+
+### Expected Time Away Beats Fixed 12 Hours
+
+The app became more trustworthy once recommendations matched the user's expected time away rather than an arbitrary fixed window.
+
+### Routine Time Is Not Forecast Window
+
+Routine time controls reminders only.
+
+Expected time away controls recommendation logic.
+
+### Local-Only Personalization First
+
+Clothing preferences are useful without accounts or backend identity.
+
+The current privacy-preserving approach is:
+
+- Store preferences locally.
+- Do not send exact selections anywhere.
+- Use defaults when skipped.
+
+### Free-Tier Pilot Bias
+
+The project consistently chose free or low-cost infrastructure:
+
+- Supabase Free.
+- Render Free for fallback/personal hosting.
+- Cloudflare Pages Free.
+- Cloudflare Workers Free.
+
+Tradeoff:
+
+- Good for pilot testing.
+- Not yet production durable.
+
+## Current Architecture
+
+Frontend:
+
+- Static PWA.
+- Vanilla HTML/CSS/JavaScript.
+- No frontend build framework.
+- Open-Meteo weather fetch from browser.
+- LocalStorage for device-local preferences.
+
+Backend/Fallback:
+
+- Express server for local/Render.
+- Serves static PWA and API routes.
+- Node `web-push` for Express push test/send.
+
+Cloudflare Pages:
+
+- Static PWA from `dist/`.
+- Pages Functions for same-origin `/api/*`.
+- Supabase REST via native fetch.
+
+Cloudflare Worker:
+
+- Cron scheduler for reminders.
+- Worker-compatible Web Push.
+
+Database:
+
+- Supabase/Postgres.
+- `push_subscriptions`.
+- `pilot_events`.
+
+## Privacy Model
+
+Stored locally only:
+
+- Exact location.
+- Clothing preferences.
+- Expected time away.
+- Onboarding completion.
+- Anonymous pilot device id.
+
+Stored in Supabase:
+
+- Push subscription JSON.
+- Routine start minutes.
+- Timezone.
+- Last reminder sent date.
+- Anonymous pilot event rows.
+
+Not stored:
+
+- User names.
+- Emails.
+- Accounts.
+- Exact clothing selections.
+- Exact location.
+
+Backend-only secrets:
+
+- Supabase service role key.
+- VAPID private key.
+
+## Known Limitations
+
+### No Accounts/Auth
+
+There is no durable user identity beyond local browser/device state and anonymous push subscriptions.
+
+### Origin-Bound Push Subscriptions
+
+Moving between Render and Cloudflare Pages creates a new origin.
+
+Users must:
+
+- Reinstall the Home Screen PWA for the new origin.
+- Re-enable reminders.
+
+Old Supabase rows may remain until cleanup.
+
+### Cloudflare Pages Test Push Not Implemented
+
+Cloudflare Pages `/api/push/test` currently returns `501`.
+
+Scheduled Web Push is handled by the Cron Worker.
+
+### Free Hosting Is Not Production Reliability
+
+Free tiers can have:
+
+- Sleep behavior.
+- Invocation limits.
+- Build limits.
+- Paused projects after inactivity.
+
+This is acceptable for careful pilot testing, not production guarantees.
+
+### No Production Monitoring
+
+There is no robust monitoring/alerting for:
+
+- Missed reminders.
+- Worker failures.
+- Supabase errors.
+- Push delivery failures.
+
+### Weather Logic Is Rule-Based
+
+The recommendation system is deterministic and transparent, but it is still hand-tuned.
+
+More pilot feedback is needed to tune thresholds.
+
+### Clothing Personalization Is Local Only
+
+This is good for privacy, but it means:
+
+- Preferences do not sync across devices.
+- Clearing browser data resets preferences.
+
+## Files Worth Knowing
+
+Frontend (modularized; `src/app.js` is now a thin bootstrap that wires the
+modules below together):
+
+- `index.html`
+- `styles.css`
+- `src/app.js`
+- `src/config.js`
+- `src/constants/storageKeys.js`
+- `src/state/appState.js`
+- `src/dom/elements.js`
+- `src/utils/format.js`, `src/utils/browser.js`
+- `src/services/weather.js`, `location.js`, `notificationsApi.js`, `pilotAnalytics.js`
+- `src/domain/recommendation.js`, `personalizedChecklist.js`, `clothingPreferences.js`, `reminders.js`
+- `src/features/onboarding/onboarding.js`
+- `src/features/checklist/checklist.js`
+- `src/features/weatherScreen/weatherScreen.js`
+- `src/features/settings/timeAway.js`, `routineStart.js`
+- `src/features/notifications/notificationSettings.js`
+- `src/features/clothingPreferences/clothingPreferencesUI.js`
+- `src/features/share/shareFab.js`
+- `src/features/pwa/serviceWorkerClient.js`
+
+PWA:
+
+- `manifest.webmanifest`
+- `sw.js`
+- `icons/app-icon.svg`
+- `icons/app-icon-180.png`
+- `icons/app-icon-192.png`
+- `icons/app-icon-512.png`
+
+Express:
+
+- `server/index.js`
+- `server/subscriptionStore.js`
+- `server/pilotEventStore.js`
+- `server/pushService.js`
+- `server/scheduler.js`
+- `server/time.js`
+
+Cloudflare Pages Functions:
+
+- `functions/_shared/backend.js`
+- `functions/api/health.js`
+- `functions/api/push/public-key.js`
+- `functions/api/push/subscriptions.js`
+- `functions/api/push/test.js`
+- `functions/api/pilot-events.js`
+
+Cloudflare Worker Cron:
+
+- `workers/reminder-scheduler/src/index.js`
+- `workers/reminder-scheduler/README.md`
+- `workers/reminder-scheduler/wrangler.toml`
+
+Build/config:
+
+- `scripts/build-pages.js`
+- `package.json`
+- `wrangler.toml`
+- `.env.example`
+
+Tests:
+
+- `tests/recommendation.test.js`
+- `tests/personalizedChecklist.test.js`
+
+## Recommended Next Steps
+
+### 1. Manual Onboarding QA
+
+Clear localStorage and test the complete first-run flow on:
+
+- Desktop browser.
+- iPhone Safari.
+- iPhone Home Screen PWA.
+
+Focus on:
+
+- Location failure handling.
+- Skip setup behavior.
+- Clothing preference save/skip.
+- Reminder enable/not-now.
+- Final checklist generation.
+
+### 2. Cloudflare End-to-End Pilot Test
+
+Verify the Pages-origin flow:
+
+- Open Pages URL.
+- Install Home Screen PWA.
+- Enable reminders.
+- Confirm Supabase row.
+- Confirm Cron Worker sends scheduled reminder.
+- Confirm `last_sent_date` updates.
+
+### 3. Subscription Cleanup Plan
+
+Design a safe way to remove old/stale subscriptions, especially after origin migration.
+
+### 4. Pilot Feedback Round
+
+Collect feedback on:
+
+- Are recommendations useful?
+- Are warning messages helpful or annoying?
+- Does expected time away make sense?
+- Does grouped category completion feel intuitive?
+- Are reminders arriving at the right time?
+
+### 5. Production Readiness Later
+
+Before a larger launch, consider:
+
+- Monitoring.
+- Better retry handling.
+- More durable identity/device model.
+- Privacy policy/consent copy.
+- Subscription lifecycle cleanup.
+- More weather threshold tuning.
+
+## Current Verification Commands
+
+Run before handing off or deploying:
+
+```sh
+npm run check
+npm run build:pages
+npm run test:recommendations
+git diff --check
 ```
+
+## Current Bottom Line
+
+Ready has moved from a basic weather-to-clothing prototype into a pilot-ready PWA architecture with local personalization, persistent push subscription storage, Cloudflare-compatible API work, and a more reliable Worker-based scheduled reminder path.
+
+The largest remaining risks are not core product functionality. They are deployment/pilot operations:
+
+- origin migration,
+- push subscription lifecycle,
+- free-tier reliability,
+- stale PWA caches,
+- and real-world recommendation tuning.
+
+The app is ready for careful personal and small pilot testing, as long as those limitations are understood.
