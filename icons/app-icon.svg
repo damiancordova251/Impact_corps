@@ -7,7 +7,7 @@
       <stop offset="0" stop-color="#14233f"/>
       <stop offset="1" stop-color="#0f172a"/>
     </linearGradient>
-    <linearGradient id="check" x1="209" y1="321" x2="304" y2="390" gradientUnits="userSpaceOnUse">
+    <linearGradient id="check" x1="204" y1="300" x2="324" y2="386" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#7ee7df"/>
       <stop offset="1" stop-color="#14b8a6"/>
     </linearGradient>
@@ -18,12 +18,12 @@
   <!-- White backpack outline represents preparedness across weather conditions. -->
   <g fill="none" stroke="#f8fafc" stroke-linecap="round" stroke-linejoin="round">
     <path d="M210 108c0-27 20-48 46-48s46 21 46 48" stroke-width="22"/>
-    <path d="M151 194h-23c-27 0-49 22-49 49v50c0 27 22 49 49 49h23" stroke-width="22"/>
-    <path d="M361 194h23c27 0 49 22 49 49v50c0 27-22 49-49 49h-23" stroke-width="22"/>
+    <path d="M147 194c-40 2-68 22-68 49v50c0 27 28 47 68 49" stroke-width="22"/>
+    <path d="M365 194c40 2 68 22 68 49v50c0 27-28 47-68 49" stroke-width="22"/>
     <path d="M147 171c0-35 28-63 63-63h92c35 0 63 28 63 63v176c0 40-32 72-72 72h-74c-40 0-72-32-72-72V171Z" stroke-width="24"/>
-    <path d="M147 170c10 37 53 60 109 60s99-24 109-60" stroke-width="24"/>
-    <rect x="232" y="242" width="48" height="55" rx="14" stroke-width="14"/>
+    <path d="M147 170c10 59 53 97 109 97s99-38 109-97" stroke-width="24"/>
+    <rect x="232" y="242" width="48" height="55" rx="8" stroke-width="20"/>
   </g>
   <!-- Teal checkmark connects the icon to the Ready Checklist action. -->
-  <path d="M209 360l30 30 65-69" fill="none" stroke="url(#check)" stroke-width="23" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M204 331l39 39 83-88" fill="none" stroke="url(#check)" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

@@ -1,6 +1,6 @@
 // Bump APP_VERSION whenever cached app shell or icon assets need to be refreshed
 // for installed PWAs.
-const APP_VERSION = "share-fab-fixed-position-icon-refine";
+const APP_VERSION = "icon-strap-smoothing";
 const CACHE_NAME = `ready-${APP_VERSION}`;
 
 // Core assets use network-first caching so pilot deployments are less likely to
