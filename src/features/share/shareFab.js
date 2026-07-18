@@ -1,4 +1,3 @@
-import { elements } from "../../dom/elements.js";
 import { APP_CONFIG } from "../../config.js";
 
 // A small referral/share feature: a floating action button that opens a
@@ -9,7 +8,12 @@ export function initShareFab() {
   const fab = createShareFab();
   const modal = createShareModal();
 
-  elements.appShell.append(fab, modal);
+  // Mounted directly on <body>, not inside .app-shell: a position:fixed
+  // descendant is only guaranteed to stay fixed to the viewport if no
+  // ancestor establishes its own containing block (transform/filter/
+  // perspective/will-change/contain). Mounting at the body root sidesteps
+  // that risk entirely instead of relying on .app-shell never adding one.
+  document.body.append(fab, modal);
 
   fab.addEventListener("click", () => openShareModal(modal));
   modal.querySelector(".share-modal-cancel").addEventListener("click", () => closeShareModal(modal));

@@ -634,7 +634,7 @@ right offset mirrors the desktop-centered app-shell (max-width 480px) so the
 button sits at the card's corner instead of the browser window's corner. */
 .share-fab {
   position: fixed;
-  right: max(20px, calc((100vw - 480px) / 2 + 20px));
+  right: max(20px, env(safe-area-inset-right), calc((100vw - 480px) / 2 + 20px));
   bottom: calc(88px + env(safe-area-inset-bottom));
   z-index: 25;
   width: 56px;
