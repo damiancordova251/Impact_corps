@@ -5,7 +5,7 @@ import {
   markReferralVisitConverted,
   parseReferralConversionPayload,
   readJson
-} from "../../../_shared/backend.js";
+} from "../../../../_shared/backend.js";
 
 // Marks a previously-logged visit as having resulted in a completed
 // installation (called once, when this device finishes onboarding).
