@@ -1,3 +1,5 @@
+import { getLocale, t } from "../i18n/i18n.js";
+
 // Shared formatting helpers used across recommendation output, checklist
 // rendering, and weather details so every feature module formats numbers and
 // times the same way instead of each defining its own copy.
@@ -9,8 +11,10 @@ export function formatTemp(value) {
   return `${Math.round(value)}°F`;
 }
 
+// Locale-aware: uses the app's selected language (not just the browser's own
+// locale, which can differ from what the user picked in Settings).
 export function formatTime(value) {
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(getLocale(), {
     hour: "numeric",
     minute: "2-digit"
   }).format(new Date(value));
@@ -20,47 +24,49 @@ export function formatTimeLabel(minutes) {
   const date = new Date();
   date.setHours(0, minutes, 0, 0);
 
-  return new Intl.DateTimeFormat(undefined, {
+  return new Intl.DateTimeFormat(getLocale(), {
     hour: "numeric",
     minute: "2-digit"
   }).format(date);
 }
 
 export function formatHourLabel(hours) {
-  return `${hours} ${hours === 1 ? "hour" : "hours"}`;
+  return t(hours === 1 ? "checklist.hourSingular" : "checklist.hourPlural", { n: hours });
 }
 
-export function formatWeatherCode(code) {
-  const labels = {
-    0: "Clear",
-    1: "Mostly clear",
-    2: "Partly cloudy",
-    3: "Cloudy",
-    45: "Fog",
-    48: "Fog",
-    51: "Light drizzle",
-    53: "Drizzle",
-    55: "Heavy drizzle",
-    56: "Freezing drizzle",
-    57: "Freezing drizzle",
-    61: "Light rain",
-    63: "Rain",
-    65: "Heavy rain",
-    66: "Freezing rain",
-    67: "Freezing rain",
-    71: "Light snow",
-    73: "Snow",
-    75: "Heavy snow",
-    77: "Snow grains",
-    80: "Rain showers",
-    81: "Rain showers",
-    82: "Heavy showers",
-    85: "Snow showers",
-    86: "Heavy snow showers",
-    95: "Thunderstorm",
-    96: "Thunderstorm with hail",
-    99: "Thunderstorm with hail"
-  };
+const WEATHER_CODE_KEYS = {
+  0: "clear",
+  1: "mostlyClear",
+  2: "partlyCloudy",
+  3: "cloudy",
+  45: "fog",
+  48: "fog",
+  51: "lightDrizzle",
+  53: "drizzle",
+  55: "heavyDrizzle",
+  56: "freezingDrizzle",
+  57: "freezingDrizzle",
+  61: "lightRain",
+  63: "rain",
+  65: "heavyRain",
+  66: "freezingRain",
+  67: "freezingRain",
+  71: "lightSnow",
+  73: "snow",
+  75: "heavySnow",
+  77: "snowGrains",
+  80: "rainShowers",
+  81: "rainShowers",
+  82: "heavyShowers",
+  85: "snowShowers",
+  86: "heavySnowShowers",
+  95: "thunderstorm",
+  96: "thunderstormHail",
+  99: "thunderstormHail"
+};
 
-  return labels[code] ?? "Unavailable";
+export function formatWeatherCode(code) {
+  const key = WEATHER_CODE_KEYS[code];
+
+  return key ? t(`weatherCode.${key}`) : t("weatherCode.unavailable");
 }

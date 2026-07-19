@@ -1,4 +1,6 @@
 import { APP_CONFIG } from "../../config.js";
+import { t } from "../../i18n/i18n.js";
+import { trackEvent } from "../../services/analytics.js";
 
 // A small referral/share feature: a floating action button that opens a
 // confirmation modal, then hands off to the device's native share sheet
@@ -32,7 +34,7 @@ function createShareFab() {
 
   button.type = "button";
   button.className = "share-fab";
-  button.setAttribute("aria-label", `Share ${APP_CONFIG.appName}`);
+  button.setAttribute("aria-label", t("share.ariaLabel", { appName: APP_CONFIG.appName }));
   button.innerHTML = shareIconSvg();
 
   return button;
@@ -46,13 +48,13 @@ function createShareModal() {
   overlay.innerHTML = `
     <div class="share-modal-backdrop"></div>
     <div class="share-modal" role="dialog" aria-modal="true" aria-labelledby="shareModalTitle">
-      <p class="kicker">Share</p>
-      <h2 id="shareModalTitle" class="share-modal-title">Share ${APP_CONFIG.appName}?</h2>
-      <p class="share-modal-body">Let a friend try ${APP_CONFIG.appName} for planning what to wear based on the weather.</p>
+      <p class="kicker">${escapeHtml(t("share.kicker"))}</p>
+      <h2 id="shareModalTitle" class="share-modal-title">${escapeHtml(t("share.title", { appName: APP_CONFIG.appName }))}</h2>
+      <p class="share-modal-body">${escapeHtml(t("share.body", { appName: APP_CONFIG.appName }))}</p>
       <p class="share-modal-message" aria-live="polite"></p>
       <div class="share-modal-actions">
-        <button type="button" class="secondary-action share-modal-cancel">Cancel</button>
-        <button type="button" class="primary-action share-modal-confirm">Share</button>
+        <button type="button" class="secondary-action share-modal-cancel">${escapeHtml(t("common.cancel"))}</button>
+        <button type="button" class="primary-action share-modal-confirm">${escapeHtml(t("common.share"))}</button>
       </div>
     </div>
   `;
@@ -63,6 +65,7 @@ function createShareModal() {
 function openShareModal(modal) {
   modal.querySelector(".share-modal-message").textContent = "";
   modal.hidden = false;
+  trackEvent("share_opened", {});
 }
 
 function closeShareModal(modal) {
@@ -82,12 +85,14 @@ async function handleShareConfirm(modal) {
         title: APP_CONFIG.appName,
         text: shareText
       });
+      trackEvent("share_completed", { method: "native" });
       closeShareModal(modal);
       return;
     }
 
     await copyShareTextToClipboard(shareText);
-    messageEl.textContent = "Link copied! Paste it anywhere to share.";
+    trackEvent("share_completed", { method: "clipboard" });
+    messageEl.textContent = t("share.linkCopied");
   } catch (error) {
     if (error?.name === "AbortError") {
       // The user cancelled the native share sheet; treat this the same as
@@ -98,7 +103,8 @@ async function handleShareConfirm(modal) {
 
     try {
       await copyShareTextToClipboard(shareText);
-      messageEl.textContent = "Link copied! Paste it anywhere to share.";
+      trackEvent("share_completed", { method: "clipboard_fallback" });
+      messageEl.textContent = t("share.linkCopied");
     } catch (clipboardError) {
       messageEl.textContent = shareText;
     }
@@ -119,16 +125,10 @@ async function copyShareTextToClipboard(text) {
 // Render and Cloudflare Pages deployments are different origins, and the only
 // correct "app link" is wherever the person sharing is actually running it.
 function buildShareMessage() {
-  const appLink = window.location.origin;
-
-  return `I've been using ${APP_CONFIG.appName} to help plan what to wear based on the weather. It recommends outfits and reminds you about anything you'll need before heading out.
-
-Try it here:
-${appLink}
-
-To install:
-• Open the link in your browser.
-• Tap Share, then "Add to Home Screen" (iPhone) or the menu button, then "Add to Home screen" / "Install app" (Android).`;
+  return t("share.message", {
+    appName: APP_CONFIG.appName,
+    link: window.location.origin
+  });
 }
 
 function shareIconSvg() {
@@ -141,4 +141,12 @@ function shareIconSvg() {
       <line x1="8.6" y1="13.4" x2="15.4" y2="17.6"></line>
     </svg>
   `;
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
 }

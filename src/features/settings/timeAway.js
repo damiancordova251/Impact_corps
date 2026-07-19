@@ -1,6 +1,7 @@
 import { elements } from "../../dom/elements.js";
 import { TIME_AWAY_STORAGE_KEY } from "../../constants/storageKeys.js";
 import { formatHourLabel } from "../../utils/format.js";
+import { t } from "../../i18n/i18n.js";
 
 export const TIME_AWAY_OPTIONS = [3, 6, 9, 12];
 export const DEFAULT_TIME_AWAY_HOURS = 6;
@@ -35,11 +36,11 @@ function handleTimeAwayChange() {
   saveTimeAwayHours(timeAwayHours);
   elements.timeAwayValue.textContent = formatHourLabel(getSavedTimeAwayHours());
   elements.reasonText.textContent = getChecklistPrompt();
-  elements.appStatus.textContent = `Checklist window saved for ${formatHourLabel(getSavedTimeAwayHours())}.`;
+  elements.appStatus.textContent = t("checklist.checklistWindowSaved", { hours: formatHourLabel(getSavedTimeAwayHours()) });
 }
 
 export function getChecklistPrompt(timeAwayHours = getSavedTimeAwayHours()) {
-  return `Prepared for the next ${timeAwayHours} hours.`;
+  return t("checklist.prepared", { hours: timeAwayHours });
 }
 
 export function getSavedTimeAwayHours() {
@@ -77,7 +78,7 @@ export function saveTimeAwayHours(timeAwayHours) {
   try {
     window.localStorage.setItem(TIME_AWAY_STORAGE_KEY, String(timeAwayHours));
   } catch (error) {
-    elements.appStatus.textContent = "Checklist window could not be saved.";
+    elements.appStatus.textContent = t("checklist.checklistWindowSaveFailed");
   }
 }
 

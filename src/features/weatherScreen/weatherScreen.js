@@ -2,6 +2,7 @@ import { elements } from "../../dom/elements.js";
 import { state } from "../../state/appState.js";
 import { bestNumber, formatTemp, formatTime, formatWeatherCode } from "../../utils/format.js";
 import { trackPilotEvent } from "../../services/pilotAnalytics.js";
+import { t } from "../../i18n/i18n.js";
 
 // Wires screen navigation (tabs + swipe track) and owns the Weather screen's
 // facts rendering.
@@ -10,6 +11,8 @@ export function initWeatherScreen() {
   elements.weatherTab.addEventListener("click", () => showScreen("weather"));
   elements.screenTrack.addEventListener("scroll", syncActiveScreenFromScroll, { passive: true });
   window.addEventListener("resize", () => syncActiveScreenFromScroll());
+  elements.checklistTab.textContent = t("tabs.checklist");
+  elements.weatherTab.textContent = t("tabs.weather");
 }
 
 // Populates the Weather screen with the current forecast summary. Called from
@@ -29,12 +32,12 @@ export function renderFacts(weather) {
   elements.temperatureTitle.textContent = formatTemp(currentTemp);
   elements.feelsFact.textContent = formatTemp(feelsLike);
   elements.rangeFact.textContent = `${formatTemp(high)} / ${formatTemp(low)}`;
-  elements.rainFact.textContent = `${Math.round(rainChance)}% chance`;
-  elements.windFact.textContent = `${Math.round(wind)} mph`;
-  elements.precipFact.textContent = `${currentPrecip.toFixed(2)} in now`;
+  elements.rainFact.textContent = t("weather.rainChanceValue", { percent: Math.round(rainChance) });
+  elements.windFact.textContent = t("weather.windValue", { mph: Math.round(wind) });
+  elements.precipFact.textContent = t("weather.precipValue", { amount: currentPrecip.toFixed(2) });
   elements.conditionFact.textContent = formatWeatherCode(bestNumber(weather.daily.weatherCode, weather.current.weatherCode));
   elements.lastUpdatedFact.textContent = formatTime(weather.fetchedAt);
-  elements.appStatus.textContent = "Checklist updated. Location stays on this device only.";
+  elements.appStatus.textContent = t("checklist.checklistUpdatedStatus");
 }
 
 export function resetFacts() {

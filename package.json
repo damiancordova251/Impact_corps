@@ -9,7 +9,7 @@
     "start": "node server/index.js",
     "generate:vapid": "web-push generate-vapid-keys",
     "generate:icons": "node scripts/generate-icons.js",
-    "test:recommendations": "node tests/recommendation.test.js && node tests/personalizedChecklist.test.js",
+    "test:recommendations": "node tests/recommendation.test.js && node tests/personalizedChecklist.test.js && node tests/notificationCopy.test.js",
     "check": "find src server functions workers/reminder-scheduler/src tests -name '*.js' -print0 | xargs -0 -n1 node --check && node --check sw.js"
   },
   "dependencies": {

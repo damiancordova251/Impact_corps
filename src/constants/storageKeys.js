@@ -9,3 +9,7 @@ export const SAVED_LOCATION_STORAGE_KEY = "readySavedLocation";
 export const TIME_AWAY_STORAGE_KEY = "readyExpectedTimeAwayHours";
 export const ONBOARDING_COMPLETED_STORAGE_KEY = "readyOnboardingCompleted";
 export const ONBOARDING_STARTED_STORAGE_KEY = "readyOnboardingStarted";
+export const LANGUAGE_STORAGE_KEY = "readyLanguage";
+export const ACTIVE_DAYS_LOG_STORAGE_KEY = "readyActiveDaysLog";
+export const FEEDBACK_PROMPT_STATE_STORAGE_KEY = "readyFeedbackPromptState";
+export const INSTALLATION_ID_STORAGE_KEY = "readyPilotAnonymousDeviceId";

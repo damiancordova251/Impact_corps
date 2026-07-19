@@ -1,9 +1,11 @@
 import { elements } from "../../dom/elements.js";
 import { state } from "../../state/appState.js";
 import { formatTimeLabel } from "../../utils/format.js";
+import { t } from "../../i18n/i18n.js";
 import { getSavedRoutineStartTime } from "../settings/routineStart.js";
-import { createChecklistReminder, getRoutineReminderCopy, REMINDER_COPY } from "../../domain/reminders.js";
+import { createChecklistReminder } from "../../domain/reminders.js";
 import { trackPilotEvent } from "../../services/pilotAnalytics.js";
+import { trackEvent } from "../../services/analytics.js";
 import {
   clearSavedPushSubscriptionId,
   getBrowserTimezone,
@@ -23,6 +25,7 @@ export function initNotificationSettings() {
   renderNotificationSetting();
   elements.enableNotificationsButton.addEventListener("click", handleNotificationButtonClick);
   elements.testNotificationButton.addEventListener("click", handleTestNotification);
+  elements.testNotificationButton.textContent = t("settings.sendTest");
 }
 
 // Wired as the routine-start slider's onInput callback from the app bootstrap
@@ -43,7 +46,7 @@ export async function handleRoutineStartCommitted() {
     return;
   }
 
-  await syncPushReminderSubscription("Routine start updated. Saving reminder schedule...");
+  await syncPushReminderSubscription(t("notifications.notificationsEnabledSaving"));
 }
 
 async function handleNotificationButtonClick() {
@@ -58,26 +61,26 @@ async function handleNotificationButtonClick() {
 }
 
 async function handleEnableNotifications() {
-  renderNotificationSetting("Requesting notification permission...");
+  renderNotificationSetting(t("notifications.requestingPermission"));
 
   const permission = await requestNotificationPermission();
 
   if (permission === "granted") {
-    await syncPushReminderSubscription("Notifications enabled. Saving server reminder...");
+    await syncPushReminderSubscription(t("notifications.notificationsEnabledSaving"));
     return;
   }
 
   if (permission === "denied") {
-    renderNotificationSetting("Notifications are blocked. Update browser or iPhone settings to enable them.");
+    renderNotificationSetting(t("notifications.blockedStatus"));
     return;
   }
 
   if (permission === "default") {
-    renderNotificationSetting("Notification permission was not granted. Tap Enable reminders to try again.");
+    renderNotificationSetting(t("notifications.permissionNotGranted"));
     return;
   }
 
-  renderNotificationSetting("Notifications are not supported in this browser.");
+  renderNotificationSetting(t("notifications.unsupportedBrowser"));
 }
 
 // Turns reminders off: removes the browser PushSubscription, deletes the
@@ -86,15 +89,16 @@ async function handleEnableNotifications() {
 // and its persisted state agree on app restart.
 async function handleDisableNotifications() {
   elements.enableNotificationsButton.disabled = true;
-  renderNotificationSetting("Turning off reminders...");
+  renderNotificationSetting(t("notifications.turningOff"));
 
   try {
     await unsubscribeFromPushReminders(state.pushSubscriptionId);
     state.pushSubscriptionId = null;
     clearSavedPushSubscriptionId();
-    renderNotificationSetting("Reminders are off. Turn them back on anytime.");
+    trackEvent("notification_opt_out", {});
+    renderNotificationSetting(t("notifications.turnedOff"));
   } catch (error) {
-    renderNotificationSetting(`Reminders could not be turned off. ${error.message}`);
+    renderNotificationSetting(t("notifications.turnOffFailed", { error: error.message }));
   } finally {
     elements.enableNotificationsButton.disabled = false;
   }
@@ -104,8 +108,15 @@ async function handleTestNotification() {
   elements.testNotificationButton.disabled = true;
 
   try {
-    await sendTestNotification(createChecklistReminder());
-    renderNotificationSetting("Test notification sent.");
+    // domain/reminders.js is shared with the Node backend (server/pushService.js),
+    // so it can't import the browser-only i18n module itself; the client-only
+    // local test notification is translated here instead, after the fact.
+    await sendTestNotification({
+      ...createChecklistReminder(),
+      title: t("notifications.testTitle"),
+      body: t("notifications.testBody")
+    });
+    renderNotificationSetting(t("notifications.testSent"));
   } catch (error) {
     renderNotificationSetting(error.message);
   }
@@ -126,9 +137,10 @@ export async function syncPushReminderSubscription(statusMessage) {
     state.pushSubscriptionId = subscription.id;
     savePushSubscriptionId(subscription.id);
     trackPilotEvent("reminders_enabled", { permission: getNotificationEnvironment().permission });
-    renderNotificationSetting("Reminders are on. You can still send a local test notification.");
+    trackEvent("notification_opt_in", { permission: getNotificationEnvironment().permission });
+    renderNotificationSetting(t("notifications.enabledOn", { scheduledServer: t("notifications.scheduledServer") }));
   } catch (error) {
-    renderNotificationSetting(`Permission is granted, but server reminders were not saved. ${error.message}`);
+    renderNotificationSetting(t("notifications.permissionGrantedNotSaved", { error: error.message }));
   }
 }
 
@@ -145,7 +157,7 @@ export function renderNotificationSetting(statusOverride = null) {
   if (!environment.supported) {
     elements.notificationStatus.textContent = statusOverride
       ?? getUnsupportedNotificationStatus(environment);
-    elements.enableNotificationsButton.textContent = "Unavailable";
+    elements.enableNotificationsButton.textContent = t("notifications.unavailable");
     elements.enableNotificationsButton.disabled = true;
     elements.testNotificationButton.disabled = true;
     return;
@@ -155,56 +167,58 @@ export function renderNotificationSetting(statusOverride = null) {
 
   if (environment.permission === "denied") {
     elements.enableNotificationsButton.disabled = true;
-    elements.enableNotificationsButton.textContent = "Blocked";
+    elements.enableNotificationsButton.textContent = t("notifications.blocked");
     elements.notificationStatus.textContent = statusOverride
-      ?? "Notifications are blocked. Update browser or iPhone settings to enable them.";
+      ?? t("notifications.blockedStatus");
     return;
   }
 
   elements.enableNotificationsButton.disabled = false;
 
   if (environment.permission === "granted" && state.pushSubscriptionId) {
-    elements.enableNotificationsButton.textContent = "Disable reminders";
+    elements.enableNotificationsButton.textContent = t("notifications.disableReminders");
     elements.notificationStatus.textContent = statusOverride ?? getEnabledNotificationStatus();
     return;
   }
 
   if (environment.permission === "granted") {
-    elements.enableNotificationsButton.textContent = "Enable reminders";
+    elements.enableNotificationsButton.textContent = t("notifications.enableReminders");
     elements.notificationStatus.textContent = statusOverride
-      ?? "Notifications are enabled, but reminders are off. Tap Enable reminders to turn them on.";
+      ?? t("notifications.onButStillOff");
     return;
   }
 
-  elements.enableNotificationsButton.textContent = "Enable reminders";
+  elements.enableNotificationsButton.textContent = t("notifications.enableReminders");
   elements.notificationStatus.textContent = statusOverride
     ?? getDefaultNotificationStatus(environment);
 }
 
 function getUnsupportedNotificationStatus(environment) {
   if (environment.needsHomeScreenInstall) {
-    return "Notifications are not supported here yet. On iPhone, install the PWA to the Home Screen and open it there.";
+    return t("notifications.unsupportedHomeScreen");
   }
 
-  return "Notifications are not supported in this browser.";
+  return t("notifications.unsupportedBrowser");
 }
 
 function getDefaultNotificationStatus(environment) {
   if (environment.needsHomeScreenInstall) {
-    return `On iPhone, install this PWA to the Home Screen before enabling reminders. ${REMINDER_COPY.scheduledServer}`;
+    return t("notifications.homeScreenRequired", { scheduledServer: t("notifications.scheduledServer") });
   }
 
-  return `Notifications are supported. Tap Enable reminders to request permission and save this PWA with the reminder server. ${REMINDER_COPY.scheduledServer}`;
+  return t("notifications.supportedDefault", { scheduledServer: t("notifications.scheduledServer") });
 }
 
 function getEnabledNotificationStatus() {
-  return `Reminders are on. ${REMINDER_COPY.scheduledServer}`;
+  return t("notifications.enabledOn", { scheduledServer: t("notifications.scheduledServer") });
 }
 
 function getReminderRoutineNote(routineStartLabel) {
+  const note = t("notifications.routineReminderCopy", { time: routineStartLabel });
+
   if (state.latestLocation) {
-    return `${getRoutineReminderCopy(routineStartLabel)} Location stays on this device.`;
+    return t("notifications.routineNoteLocation", { note });
   }
 
-  return getRoutineReminderCopy(routineStartLabel);
+  return note;
 }

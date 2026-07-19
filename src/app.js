@@ -3,7 +3,11 @@
 // cross-feature callbacks that would otherwise create circular imports.
 import { state } from "./state/appState.js";
 import { trackPilotEvent } from "./services/pilotAnalytics.js";
+import { trackEvent } from "./services/analytics.js";
 import { isStandalonePwa } from "./utils/browser.js";
+import { applyStaticTranslations } from "./i18n/i18n.js";
+import { initLanguageSetting } from "./features/settings/language.js";
+import { initFeedbackPrompt } from "./features/feedback/feedbackPrompt.js";
 import { renderWindowRecommendation } from "./features/checklist/checklist.js";
 import {
   initializeTimeAwaySetting,
@@ -24,6 +28,8 @@ import { initWeatherScreen } from "./features/weatherScreen/weatherScreen.js";
 import { initPwaClient } from "./features/pwa/serviceWorkerClient.js";
 import { initOnboarding } from "./features/onboarding/onboarding.js";
 import { initShareFab } from "./features/share/shareFab.js";
+
+applyStaticTranslations();
 
 initChecklist();
 initWeatherScreen();
@@ -49,7 +55,10 @@ initNotificationSettings();
 initClothingPreferencesUI();
 initPwaClient();
 initShareFab();
+initLanguageSetting();
+initFeedbackPrompt();
 
 trackPilotEvent("app_opened", { standalone: isStandalonePwa() });
+trackEvent("session_started", { standalone: isStandalonePwa() });
 
 initOnboarding();

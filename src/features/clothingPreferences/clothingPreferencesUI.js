@@ -1,5 +1,7 @@
 import { elements } from "../../dom/elements.js";
 import { state } from "../../state/appState.js";
+import { t } from "../../i18n/i18n.js";
+import { translateDomainString } from "../../i18n/domainStrings.js";
 import {
   CLOTHING_PREFERENCE_CATEGORIES,
   getSavedClothingPreferences,
@@ -61,8 +63,8 @@ function createClothingPreferenceCategory(category, selectedOptions) {
   const selectedSet = new Set(selectedOptions);
 
   section.className = "preference-category";
-  heading.textContent = category.label;
-  helper.textContent = "Choose at least one";
+  heading.textContent = translateDomainString(category.label);
+  helper.textContent = t("clothingPreferences.chooseAtLeastOne");
   chipGroup.className = "preference-chip-group";
 
   chipGroup.replaceChildren(...category.options.map((option) => createClothingPreferenceChip(category.id, option, selectedSet.has(option))));
@@ -81,7 +83,7 @@ function createClothingPreferenceChip(categoryId, option, selected) {
   checkbox.name = categoryId;
   checkbox.value = option;
   checkbox.checked = selected;
-  text.textContent = option;
+  text.textContent = translateDomainString(option);
 
   label.append(checkbox, text);
   return label;
@@ -94,14 +96,16 @@ function handleClothingPreferencesSave(event) {
   const validation = validateClothingPreferences(preferences);
 
   if (!validation.valid) {
-    elements.clothingPreferencesMessage.textContent = `Choose at least one item for ${formatMissingPreferenceCategories(validation.missingCategories)}.`;
+    elements.clothingPreferencesMessage.textContent = t("clothingPreferences.chooseAtLeastOneFor", {
+      categories: formatMissingPreferenceCategories(validation.missingCategories)
+    });
     return;
   }
 
   try {
     saveClothingPreferences(preferences);
     hideClothingPreferencesScreen();
-    elements.appStatus.textContent = "Clothing preferences saved on this device only.";
+    elements.appStatus.textContent = t("clothingPreferences.savedOnDevice");
 
     if (state.clothingPreferencesMode === "onboarding") {
       onOnboardingContinue();
@@ -109,13 +113,13 @@ function handleClothingPreferencesSave(event) {
     }
 
     if (rerenderLatestChecklist("clothing_preferences_updated")) {
-      elements.appStatus.textContent = "Clothing preferences saved. Checklist updated.";
+      elements.appStatus.textContent = t("clothingPreferences.savedChecklistUpdated");
       return;
     }
 
     startAppExperience();
   } catch (error) {
-    elements.clothingPreferencesMessage.textContent = "Preferences could not be saved on this device.";
+    elements.clothingPreferencesMessage.textContent = t("clothingPreferences.saveFailed");
   }
 }
 
@@ -128,7 +132,7 @@ function handleClothingPreferencesSkip() {
   }
 
   hideClothingPreferencesScreen();
-  elements.appStatus.textContent = "Clothing preferences skipped. You can edit them from Settings.";
+  elements.appStatus.textContent = t("clothingPreferences.skippedStatus");
   startAppExperience();
 }
 
@@ -142,9 +146,14 @@ function getClothingPreferencesFromForm() {
 }
 
 function formatMissingPreferenceCategories(categories) {
-  if (categories.length <= 1) {
-    return categories[0] ?? "each category";
+  const translated = categories.map(translateDomainString);
+
+  if (translated.length <= 1) {
+    return translated[0] ?? t("clothingPreferences.eachCategory");
   }
 
-  return `${categories.slice(0, -1).join(", ")} and ${categories.at(-1)}`;
+  return t("clothingPreferences.categoryListJoin", {
+    initial: translated.slice(0, -1).join(", "),
+    last: translated.at(-1)
+  });
 }

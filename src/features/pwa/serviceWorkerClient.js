@@ -1,6 +1,7 @@
 import { elements } from "../../dom/elements.js";
 import { APP_CONFIG } from "../../config.js";
 import { trackPilotEvent } from "../../services/pilotAnalytics.js";
+import { t } from "../../i18n/i18n.js";
 
 // Registers the service worker, wires the update-available banner, tracks
 // notification-click opens, and reflects install state into pilot analytics.
@@ -26,7 +27,7 @@ function registerServiceWorker() {
       .register("./sw.js")
       .then(watchForServiceWorkerUpdates)
       .catch(() => {
-        elements.appStatus.textContent = `${APP_CONFIG.appName} is running without offline cache.`;
+        elements.appStatus.textContent = t("pwa.runningWithoutOfflineCache", { appName: APP_CONFIG.appName });
       });
   });
 }
@@ -61,7 +62,7 @@ function watchForServiceWorkerUpdates(registration) {
 
 function showUpdateBanner() {
   if (!elements.updateBanner) {
-    elements.appStatus.textContent = "Update available. Refresh to get the latest version.";
+    elements.appStatus.textContent = t("pwa.updateAvailableRefreshPrompt");
     return;
   }
 

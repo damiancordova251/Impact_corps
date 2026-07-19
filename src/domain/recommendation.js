@@ -121,6 +121,15 @@ export function buildWindowWeather(weather, forecastWindow) {
 // Converts summarized weather conditions into checklist items. Clothing is
 // built from eligible top and bottom options first, then conditional accessories
 // are added for weather-specific needs.
+//
+// Items and reasons are returned as structured, translatable descriptors
+// rather than pre-formatted English sentences: `items` entries are
+// `{ type: "clothingGroup", category, weightLabel, options }` or
+// `{ type: "accessory", options }`, and `reasons` entries are
+// `{ key, params }`. The UI layer (features/checklist/checklist.js) is
+// responsible for translating and composing the final display strings via
+// src/i18n. This keeps the recommendation engine itself language-agnostic
+// instead of baking English copy into its output.
 export function createRecommendation(windowWeather) {
   const features = getWindowFeatures(windowWeather);
   const topOptions = selectClothingOptions(
@@ -137,16 +146,26 @@ export function createRecommendation(windowWeather) {
   );
   const accessories = getAccessoryActions(features);
   const actions = [
-    { item: formatClothingGroup("Top", topOptions, TOP_CLOTHING_WEIGHTS), priority: 200 },
-    { item: formatClothingGroup("Bottom", bottomOptions, BOTTOM_CLOTHING_WEIGHTS), priority: 190 },
+    {
+      type: "clothingGroup",
+      category: "Top",
+      weightLabel: getClothingWeightLabel(topOptions, TOP_CLOTHING_WEIGHTS),
+      options: topOptions,
+      priority: 200
+    },
+    {
+      type: "clothingGroup",
+      category: "Bottom",
+      weightLabel: getClothingWeightLabel(bottomOptions, BOTTOM_CLOTHING_WEIGHTS),
+      options: bottomOptions,
+      priority: 190
+    },
     ...accessories
   ];
-  const items = actions.slice(0, MAX_CHECKLIST_ITEMS).map((action) => action.item);
+  const items = actions.slice(0, MAX_CHECKLIST_ITEMS);
 
   return {
-    title: "Ready for your weather window",
-    reason: combineReasons(features.reasons, features.durationHours),
-    checklistTitle: READY_CHECKLIST_TITLE,
+    reasons: buildReasons(features.reasons, features.durationHours),
     items,
     weatherNeeds: createWeatherNeeds(features)
   };
@@ -197,19 +216,19 @@ function getWindowFeatures(weather) {
   const reasons = [];
 
   if (winterPrecipRisk) {
-    reasons.push(snowRisk ? "Snow is likely in your window." : "Freezing precipitation is possible.");
+    reasons.push(snowRisk ? { key: "reason.snowLikely" } : { key: "reason.freezingPrecip" });
   } else if (rainProfile.umbrellaRisk) {
     reasons.push(getRainReason(precipProbability, durationHours));
   }
 
   if (veryCold) {
-    reasons.push(`It feels like ${formatTemp(minFeels)} at the coldest point.`);
+    reasons.push({ key: "reason.feelsLikeColdest", params: { temp: formatTemp(minFeels) } });
   } else if (cool && !rainProfile.umbrellaRisk) {
-    reasons.push(`It may feel as cool as ${formatTemp(minFeels)}.`);
+    reasons.push({ key: "reason.mayFeelCool", params: { temp: formatTemp(minFeels) } });
   }
 
   if (windy) {
-    reasons.push(`Wind may reach ${Math.round(wind)} mph.`);
+    reasons.push({ key: "reason.windMayReach", params: { mph: Math.round(wind) } });
   }
 
   return {
@@ -345,27 +364,27 @@ function getAccessoryActions(features) {
   const accessories = [];
 
   if (features.rainRisk && !features.winterPrecipRisk) {
-    accessories.push({ item: "Umbrella / Rain Jacket", priority: 80 });
+    accessories.push({ type: "accessory", options: ["Umbrella", "Rain Jacket"], priority: 80 });
   }
 
   if (features.sunProtection) {
-    accessories.push({ item: "Sunglasses / Hat", priority: 70 });
+    accessories.push({ type: "accessory", options: ["Sunglasses", "Hat"], priority: 70 });
   }
 
   if (features.minFeels <= 40 || (features.windy && features.minFeels <= 45)) {
-    accessories.push({ item: "Beanie", priority: 66 });
+    accessories.push({ type: "accessory", options: ["Beanie"], priority: 66 });
   }
 
   if (features.minFeels <= 38 || (features.windy && features.minFeels <= 42)) {
-    accessories.push({ item: "Gloves", priority: 65 });
+    accessories.push({ type: "accessory", options: ["Gloves"], priority: 65 });
   }
 
   if (features.minFeels <= 36 || (features.coldWind && features.minFeels <= 40)) {
-    accessories.push({ item: "Scarf", priority: 64 });
+    accessories.push({ type: "accessory", options: ["Scarf"], priority: 64 });
   }
 
   if (features.winterPrecipRisk) {
-    accessories.push({ item: "Winter shoes / Snow boots", priority: 63 });
+    accessories.push({ type: "accessory", options: ["Winter shoes", "Snow boots"], priority: 63 });
   }
 
   return accessories.sort((a, b) => b.priority - a.priority);
@@ -477,16 +496,6 @@ function dedupeOptions(options) {
   });
 
   return [...bestOptions.values()];
-}
-
-function formatOptionGroup(options) {
-  return options.join(" / ");
-}
-
-function formatClothingGroup(category, options, weightMap) {
-  const weightLabel = getClothingWeightLabel(options, weightMap);
-
-  return `${category} (${weightLabel}): ${formatOptionGroup(options)}`;
 }
 
 function getClothingWeightLabel(options, weightMap) {
@@ -744,23 +753,23 @@ function isCloudyCode(code) {
     && !SNOW_CODES.has(normalizedCode);
 }
 
-// Copy helpers keep the checklist title, reason, and rain explanation concise.
-function combineReasons(reasons, durationHours) {
-  const uniqueReasons = [...new Set(reasons)];
-
-  if (uniqueReasons.length === 0) {
-    return `The next ${durationHours} hours look manageable.`;
+// Returns up to two structured {key, params} reasons for the UI layer to
+// translate and join, falling back to a generic "manageable" reason key when
+// nothing notable applies.
+function buildReasons(reasons, durationHours) {
+  if (reasons.length === 0) {
+    return [{ key: "reason.manageable", params: { hours: durationHours } }];
   }
 
-  return uniqueReasons.slice(0, 2).join(" ");
+  return reasons.slice(0, 2);
 }
 
 function getRainReason(precipProbability, durationHours) {
   if (precipProbability > 0) {
-    return `Rain risk is ${Math.round(precipProbability)}%.`;
+    return { key: "reason.rainRiskPercent", params: { percent: Math.round(precipProbability) } };
   }
 
-  return `Rain is in the next ${durationHours}-hour forecast.`;
+  return { key: "reason.rainInForecast", params: { hours: durationHours } };
 }
 
 function normalizeForecastWindowHours(value) {

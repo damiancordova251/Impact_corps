@@ -4,6 +4,7 @@ import {
   ROUTINE_START_STORAGE_KEY
 } from "../../constants/storageKeys.js";
 import { formatTimeLabel } from "../../utils/format.js";
+import { t } from "../../i18n/i18n.js";
 
 export const ROUTINE_START_STEP_MINUTES = 30;
 export const DEFAULT_ROUTINE_START_MINUTES = 6 * 60;
@@ -36,7 +37,7 @@ function handleRoutineStartChange() {
 
   saveRoutineStartTime(routineStartTime);
   elements.routineStartValue.textContent = formatTimeLabel(routineStartTime);
-  elements.appStatus.textContent = `Routine start saved for ${formatTimeLabel(routineStartTime)}.`;
+  elements.appStatus.textContent = t("checklist.routineStartSaved", { time: formatTimeLabel(routineStartTime) });
 }
 
 export function getSavedRoutineStartTime() {
@@ -68,7 +69,7 @@ export function saveRoutineStartTime(routineStartTime) {
   try {
     window.localStorage.setItem(ROUTINE_START_STORAGE_KEY, String(routineStartTime));
   } catch (error) {
-    elements.appStatus.textContent = "Start time could not be saved.";
+    elements.appStatus.textContent = t("checklist.routineStartSaveFailed");
   }
 }
 

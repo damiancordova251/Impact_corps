@@ -1,8 +1,8 @@
 import { APP_CONFIG } from "../config.js";
+import { INSTALLATION_ID_STORAGE_KEY } from "../constants/storageKeys.js";
 
 // Pilot analytics intentionally stays anonymous and small: one local device id,
 // a limited event allowlist, and minimal non-sensitive metadata.
-const DEVICE_ID_STORAGE_KEY = "readyPilotAnonymousDeviceId";
 const ALLOWED_EVENT_TYPES = new Set([
   "app_opened",
   "checklist_generated",
@@ -54,7 +54,7 @@ export function trackPilotEvent(eventType, metadata = {}) {
 // location is involved.
 function getAnonymousDeviceId() {
   try {
-    const existingId = window.localStorage.getItem(DEVICE_ID_STORAGE_KEY);
+    const existingId = window.localStorage.getItem(INSTALLATION_ID_STORAGE_KEY);
 
     if (existingId) {
       return existingId;
@@ -62,7 +62,7 @@ function getAnonymousDeviceId() {
 
     const newId = window.crypto?.randomUUID ? window.crypto.randomUUID() : createFallbackId();
 
-    window.localStorage.setItem(DEVICE_ID_STORAGE_KEY, newId);
+    window.localStorage.setItem(INSTALLATION_ID_STORAGE_KEY, newId);
     return newId;
   } catch (error) {
     return null;

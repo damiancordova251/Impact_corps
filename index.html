@@ -15,6 +15,15 @@
     <link rel="icon" href="icons/app-icon.svg" type="image/svg+xml">
     <link rel="apple-touch-icon" sizes="180x180" href="icons/app-icon-180.png">
     <link rel="stylesheet" href="styles.css">
+    <!-- Social/share preview metadata (referral links, message previews). -->
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="Ready">
+    <meta property="og:description" content="A simple clothing and accessory checklist based on today's weather.">
+    <meta property="og:image" content="icons/app-icon-512.png">
+    <meta name="twitter:card" content="summary">
+    <meta name="twitter:title" content="Ready">
+    <meta name="twitter:description" content="A simple clothing and accessory checklist based on today's weather.">
+    <meta name="twitter:image" content="icons/app-icon-512.png">
     <script type="module" src="src/app.js"></script>
   </head>
   <body>
@@ -22,7 +31,7 @@
       <!-- Top status area shows the product name and current app state. -->
       <header class="top-bar">
         <p class="brand">Ready</p>
-        <p class="status-pill" id="statusPill">Ready</p>
+        <p class="status-pill" id="statusPill" data-i18n="topBar.statusReady">Ready</p>
       </header>
 
       <!-- Tabs mirror the swipeable screen track for checklist and weather views. -->
@@ -46,35 +55,41 @@
           <ul class="item-list" id="itemList" aria-label="Checklist items"></ul>
           <button class="primary-action" id="primaryAction" type="button">Use current location</button>
           <details class="settings-panel">
-            <summary>Settings</summary>
+            <summary data-i18n="settings.summary">Settings</summary>
             <label class="routine-start-setting" for="timeAwayInput">
-              <span>How long will you be away from home?</span>
+              <span data-i18n="settings.timeAwayLabel">How long will you be away from home?</span>
               <strong id="timeAwayValue">6 hours</strong>
             </label>
             <input id="timeAwayInput" class="routine-start-slider" type="range" min="3" max="12" step="3" value="6">
             <label class="routine-start-setting" for="routineStartInput">
-              <span>When should your daily reminder arrive?</span>
+              <span data-i18n="settings.routineStartLabel">When should your daily reminder arrive?</span>
               <strong id="routineStartValue">6:00 AM</strong>
             </label>
             <input id="routineStartInput" class="routine-start-slider" type="range" min="0" max="47" step="1" value="12">
             <section class="preference-setting" aria-label="Clothing preference settings">
               <div class="setting-copy">
-                <span>Clothing preferences</span>
-                <p>Choose what you actually wear. These choices stay on this device only.</p>
+                <span data-i18n="settings.clothingPreferencesTitle">Clothing preferences</span>
+                <p data-i18n="settings.clothingPreferencesBody">Choose what you actually wear. These choices stay on this device only.</p>
               </div>
-              <button class="secondary-action" id="editClothingPreferencesButton" type="button">Edit clothing preferences</button>
+              <button class="secondary-action" id="editClothingPreferencesButton" type="button" data-i18n="settings.editClothingPreferences">Edit clothing preferences</button>
             </section>
             <section class="notification-setting" aria-label="Checklist reminder settings">
               <div class="setting-copy">
-                <span>Checklist reminders</span>
+                <span data-i18n="settings.notificationsTitle">Checklist reminders</span>
                 <p id="notificationStatus">Enable reminders to save this PWA for server push notifications.</p>
                 <p id="notificationRoutineNote">Scheduled reminders will use your 6:00 AM routine start.</p>
-                <p>Location stays on this device. Basic anonymous usage events may be recorded during the pilot.</p>
+                <p data-i18n="settings.notificationsPrivacyNote">Location stays on this device. Basic anonymous usage events may be recorded during the pilot.</p>
               </div>
               <div class="notification-actions">
                 <button class="secondary-action" id="enableNotificationsButton" type="button">Enable reminders</button>
                 <button class="secondary-action" id="testNotificationButton" type="button" disabled>Send test</button>
               </div>
+            </section>
+            <section class="language-setting" aria-label="Language settings">
+              <div class="setting-copy">
+                <span data-i18n="settings.languageLabel">Language</span>
+              </div>
+              <select id="languageSelect" class="language-select"></select>
             </section>
           </details>
         </section>
@@ -82,39 +97,39 @@
         <!-- Weather Details screen: summary facts derived from the latest forecast. -->
         <section class="weather-screen app-screen" id="weatherScreen" aria-label="Weather details">
           <div class="weather-hero">
-            <p class="kicker">Weather Details</p>
+            <p class="kicker" data-i18n="weather.detailsKicker">Weather Details</p>
             <h1 class="temperature-title" id="temperatureTitle">--</h1>
             <div class="temperature-summary">
               <div>
-                <span>High / low</span>
+                <span data-i18n="weather.highLow">High / low</span>
                 <strong id="rangeFact">--</strong>
               </div>
               <div>
-                <span>Feels like</span>
+                <span data-i18n="weather.feelsLike">Feels like</span>
                 <strong id="feelsFact">--</strong>
               </div>
             </div>
           </div>
 
           <div class="weather-detail-list">
-            <section class="weather-detail-section" aria-label="Rain">
-              <span>Rain chance</span>
+            <section class="weather-detail-section" data-i18n-aria="weather.rainChance" aria-label="Rain">
+              <span data-i18n="weather.rainChance">Rain chance</span>
               <strong id="rainFact">--</strong>
             </section>
-            <section class="weather-detail-section" aria-label="Current precipitation">
-              <span>Current precipitation</span>
+            <section class="weather-detail-section" data-i18n-aria="weather.currentPrecipitation" aria-label="Current precipitation">
+              <span data-i18n="weather.currentPrecipitation">Current precipitation</span>
               <strong id="precipFact">--</strong>
             </section>
-            <section class="weather-detail-section" aria-label="Wind">
-              <span>Wind</span>
+            <section class="weather-detail-section" data-i18n-aria="weather.wind" aria-label="Wind">
+              <span data-i18n="weather.wind">Wind</span>
               <strong id="windFact">--</strong>
             </section>
-            <section class="weather-detail-section" aria-label="Conditions">
-              <span>Conditions</span>
+            <section class="weather-detail-section" data-i18n-aria="weather.conditions" aria-label="Conditions">
+              <span data-i18n="weather.conditions">Conditions</span>
               <strong id="conditionFact">--</strong>
             </section>
-            <section class="weather-detail-section" aria-label="Last updated">
-              <span>Last updated</span>
+            <section class="weather-detail-section" data-i18n-aria="weather.lastUpdated" aria-label="Last updated">
+              <span data-i18n="weather.lastUpdated">Last updated</span>
               <strong id="lastUpdatedFact">--</strong>
             </section>
           </div>
@@ -123,13 +138,13 @@
 
       <!-- Footer status gives lightweight guidance without interrupting the flow. -->
       <footer class="footer-note">
-        <p id="appStatus">Tap Use current location once. Location can be stored on this device for faster starts.</p>
+        <p id="appStatus" data-i18n="checklist.tapLocationOnceStatus">Tap Use current location once. Location can be stored on this device for faster starts.</p>
       </footer>
 
       <!-- Service worker update prompt shown when a new app version is available. -->
       <div class="update-banner" id="updateBanner" hidden>
-        <span>Update available</span>
-        <button id="updateRefreshButton" type="button">Refresh</button>
+        <span data-i18n="pwa.updateAvailable">Update available</span>
+        <button id="updateRefreshButton" type="button" data-i18n="pwa.refresh">Refresh</button>
       </div>
 
       <!-- First-run setup writes to the same local settings used by the normal
@@ -155,14 +170,14 @@
       <!-- Local-only clothing preference onboarding/settings screen. -->
       <section class="clothing-preferences-screen" id="clothingPreferencesScreen" hidden aria-labelledby="clothingPreferencesTitle">
         <div class="preferences-card">
-          <button class="skip-link" id="clothingPreferencesSkip" type="button">Skip &#8594;</button>
-          <p class="kicker">Personalize</p>
-          <h1 class="preferences-title" id="clothingPreferencesTitle">What clothes do you wear</h1>
-          <p class="preferences-subtext">Choose the pieces you actually use so Ready can personalize your checklist.</p>
+          <button class="skip-link" id="clothingPreferencesSkip" type="button" data-i18n="clothingPreferences.skip">Skip &#8594;</button>
+          <p class="kicker" data-i18n="clothingPreferences.personalizeKicker">Personalize</p>
+          <h1 class="preferences-title" id="clothingPreferencesTitle" data-i18n="clothingPreferences.title">What clothes do you wear</h1>
+          <p class="preferences-subtext" data-i18n="clothingPreferences.subtext">Choose the pieces you actually use so Ready can personalize your checklist.</p>
           <form id="clothingPreferencesForm" novalidate>
             <div class="preference-categories" id="clothingPreferenceCategories"></div>
             <p class="preferences-message" id="clothingPreferencesMessage" aria-live="polite"></p>
-            <button class="primary-action" type="submit">Save Preferences</button>
+            <button class="primary-action" type="submit" data-i18n="clothingPreferences.savePreferences">Save Preferences</button>
           </form>
         </div>
       </section>

@@ -4,6 +4,9 @@ import { SAVED_LOCATION_STORAGE_KEY } from "../../constants/storageKeys.js";
 import { getCurrentLocation, LocationAccessError } from "../../services/location.js";
 import { fetchTodayWeather, WeatherFetchError } from "../../services/weather.js";
 import { trackPilotEvent } from "../../services/pilotAnalytics.js";
+import { trackEvent } from "../../services/analytics.js";
+import { t } from "../../i18n/i18n.js";
+import { translateDomainString } from "../../i18n/domainStrings.js";
 import {
   buildWindowWeather,
   createRecommendation,
@@ -21,6 +24,7 @@ import { renderFacts, resetFacts } from "../weatherScreen/weatherScreen.js";
 export function initChecklist() {
   elements.primaryAction.addEventListener("click", handleRecommendationRequest);
   elements.itemList.addEventListener("change", updateCompletionState);
+  elements.primaryAction.textContent = t("checklist.primaryActionUseLocation");
 }
 
 export function startAppExperience() {
@@ -53,7 +57,7 @@ export function rerenderLatestChecklist(source) {
 async function handleRecommendationRequest() {
   const requestedAt = new Date();
 
-  setLoading("Getting location");
+  setLoading(t("checklist.loadingLabelLocation"));
 
   try {
     const location = await getCurrentLocation();
@@ -61,11 +65,12 @@ async function handleRecommendationRequest() {
     saveLocationForThisDevice(state.latestLocation);
     renderNotificationSetting();
     trackPilotEvent("location_updated", { source: "current_location" });
-    setLoading("Checking weather");
+    setLoading(t("checklist.loadingLabelWeather"));
 
     const weather = await fetchTodayWeather(location);
     renderWindowRecommendation(weather, requestedAt, { source: "current_location" });
   } catch (error) {
+    trackEvent("client_error", { errorType: "checklist_request_failed", message: error?.message });
     renderError(error);
   }
 }
@@ -76,21 +81,21 @@ export async function initializeSavedLocationChecklist() {
   const savedLocation = getSavedLocationForThisDevice();
 
   if (!savedLocation) {
-    elements.appStatus.textContent = "Tap Use current location once. Location can be stored on this device for faster starts.";
+    elements.appStatus.textContent = t("checklist.tapLocationOnceStatus");
     return;
   }
 
   state.latestLocation = savedLocation;
   renderNotificationSetting();
-  setLoading("Checking saved location");
+  setLoading(t("checklist.loadingLabelSavedLocation"));
 
   try {
     const weather = await fetchTodayWeather(savedLocation);
     renderWindowRecommendation(weather, new Date(), { source: "saved_location" });
   } catch (error) {
     renderError(error);
-    elements.primaryAction.textContent = "Use current location";
-    elements.appStatus.textContent = "Saved location could not update the checklist. Tap Use current location to refresh it.";
+    elements.primaryAction.textContent = t("checklist.primaryActionUseLocation");
+    elements.appStatus.textContent = t("checklist.savedLocationFailedStatus");
   }
 }
 
@@ -107,7 +112,7 @@ export function renderWindowRecommendation(weather, requestedAt = new Date(), op
 
   state.latestWeather = weather;
   state.latestRecommendationRequestedAt = requestedAt;
-  renderRecommendation(weather, recommendation, timeAwayHours, renderedChecklist);
+  renderRecommendation(weather, timeAwayHours, renderedChecklist);
   trackPilotEvent("checklist_generated", {
     source: options.source ?? "unknown",
     itemCount: getChecklistItemCount(renderedChecklist),
@@ -116,17 +121,23 @@ export function renderWindowRecommendation(weather, requestedAt = new Date(), op
     has_clothing_preferences: Boolean(groupedChecklist?.personalized),
     personalized_checklist: Boolean(groupedChecklist?.personalized)
   });
+  trackEvent("recommendation_generated", {
+    source: options.source ?? "unknown",
+    itemCount: getChecklistItemCount(renderedChecklist),
+    expectedTimeAwayHours: timeAwayHours,
+    personalized: Boolean(groupedChecklist?.personalized)
+  });
 }
 
 // Updates the main checklist screen after a successful weather fetch.
-function renderRecommendation(weather, recommendation, timeAwayHours, checklist) {
+function renderRecommendation(weather, timeAwayHours, checklist) {
   elements.appShell.classList.remove("is-error", "is-warning", "is-complete");
-  elements.statusPill.textContent = "Updated";
-  elements.kicker.textContent = "Today";
-  elements.recommendationTitle.textContent = recommendation.checklistTitle ?? "Ready Checklist:";
+  elements.statusPill.textContent = t("topBar.statusUpdated");
+  elements.kicker.textContent = t("checklist.todayKicker");
+  elements.recommendationTitle.textContent = t("checklist.title");
   elements.reasonText.textContent = getChecklistPrompt(timeAwayHours);
   elements.primaryAction.disabled = false;
-  elements.primaryAction.textContent = "Update location";
+  elements.primaryAction.textContent = t("checklist.primaryActionUpdateLocation");
 
   renderItems(checklist);
   updateCompletionState();
@@ -148,7 +159,7 @@ function renderItems(checklist) {
   if (items.length === 0) {
     const listItem = document.createElement("li");
     listItem.className = "empty-checklist";
-    listItem.textContent = "No extra items needed";
+    listItem.textContent = t("checklist.emptyChecklist");
     elements.itemList.replaceChildren(listItem);
     return;
   }
@@ -169,13 +180,13 @@ function renderPersonalizedItems(sections) {
 // location/weather/reminder work is running or has failed.
 export function setLoading(label) {
   elements.appShell.classList.remove("is-error", "is-warning", "is-complete");
-  elements.statusPill.textContent = "Loading";
+  elements.statusPill.textContent = t("topBar.statusLoading");
   elements.kicker.textContent = label;
-  elements.recommendationTitle.textContent = "Ready Checklist:";
-  elements.reasonText.textContent = `Checking weather for the next ${getSavedTimeAwayHours()} hours.`;
+  elements.recommendationTitle.textContent = t("checklist.title");
+  elements.reasonText.textContent = t("checklist.loadingReason", { hours: getSavedTimeAwayHours() });
   elements.primaryAction.disabled = true;
-  elements.primaryAction.textContent = "Checking...";
-  elements.appStatus.textContent = "Location is stored on this device only.";
+  elements.primaryAction.textContent = t("checklist.primaryActionChecking");
+  elements.appStatus.textContent = t("checklist.locationOnlyStatus");
   clearItems();
 }
 
@@ -190,14 +201,17 @@ function renderError(error) {
   elements.recommendationTitle.textContent = copy.title;
   elements.reasonText.textContent = copy.reason;
   elements.primaryAction.disabled = false;
-  elements.primaryAction.textContent = "Try again";
+  elements.primaryAction.textContent = t("checklist.primaryActionTryAgain");
   elements.appStatus.textContent = copy.footer;
   clearItems();
   resetFacts();
 }
 
 // Builds one accessible checklist row with a hidden checkbox and styled check
-// mark.
+// mark. `item` is either a structured recommendation descriptor
+// (clothingGroup/accessory) or a personalized-checklist entry (a canonical
+// clothing-item string or a {label, warning} fallback object) — all resolved
+// to translated display text + optional warning here.
 function createChecklistItem(item) {
   const listItem = document.createElement("li");
 
@@ -214,7 +228,7 @@ function createChecklistSection(section) {
   listItem.className = "checklist-section";
   listItem.dataset.checklistSection = "true";
   heading.className = "checklist-section-title";
-  heading.textContent = section.title;
+  heading.textContent = `${translateDomainString(section.category)} (${translateDomainString(section.label)})`;
   rows.className = "checklist-section-items";
   rows.replaceChildren(...section.items.map(createChecklistRow));
   listItem.append(heading, rows);
@@ -269,6 +283,7 @@ function updateCompletionState() {
   if (isComplete && !state.completedTrackedForChecklist) {
     state.completedTrackedForChecklist = true;
     trackPilotEvent("checklist_completed", { itemCount: checkboxes.length });
+    trackEvent("checklist_completed", { itemCount: checkboxes.length });
   }
 }
 
@@ -278,16 +293,36 @@ function clearItems() {
   updateCompletionState();
 }
 
+// Normalizes a checklist row into its final translated {label, warning} shape
+// from any of the three source shapes: a structured recommendation
+// descriptor (clothingGroup/accessory), a personalized-checklist {label,
+// warning} fallback object, or a plain canonical clothing-item string.
 function normalizeChecklistItem(item) {
+  if (item && item.type === "clothingGroup") {
+    const options = item.options.map(translateDomainString).join(" / ");
+
+    return {
+      label: `${translateDomainString(item.category)} (${translateDomainString(item.weightLabel)}): ${options}`,
+      warning: ""
+    };
+  }
+
+  if (item && item.type === "accessory") {
+    return {
+      label: item.options.map(translateDomainString).join(" / "),
+      warning: ""
+    };
+  }
+
   if (item && typeof item === "object" && !Array.isArray(item)) {
     return {
-      label: item.label ?? "",
-      warning: item.warning ?? ""
+      label: translateDomainString(item.label ?? ""),
+      warning: translateDomainString(item.warning ?? "")
     };
   }
 
   return {
-    label: String(item),
+    label: translateDomainString(String(item)),
     warning: ""
   };
 }
@@ -312,53 +347,53 @@ function getErrorCopy(error) {
     if (error.code === "DENIED") {
       return {
         kind: "warning",
-        status: "Location off",
-        kicker: "Location",
-        title: "Turn on location",
-        reason: "Location permission is needed to check today's weather.",
-        footer: "On iPhone, allow location for this site in Safari settings."
+        status: t("checklist.errorLocationOffStatus"),
+        kicker: t("checklist.kickerLocation"),
+        title: t("checklist.errorLocationOffTitle"),
+        reason: t("checklist.errorLocationOffReason"),
+        footer: t("checklist.errorLocationOffFooter")
       };
     }
 
     if (error.code === "INSECURE_CONTEXT") {
       return {
         kind: "warning",
-        status: "HTTPS needed",
-        kicker: "Location",
-        title: "Use HTTPS or localhost",
-        reason: "iPhone requires a secure page before GPS can work.",
-        footer: "Localhost works for development. A hosted pilot should use HTTPS."
+        status: t("checklist.errorHttpsNeededStatus"),
+        kicker: t("checklist.kickerLocation"),
+        title: t("checklist.errorHttpsNeededTitle"),
+        reason: t("checklist.errorHttpsNeededReason"),
+        footer: t("checklist.errorHttpsNeededFooter")
       };
     }
 
     return {
       kind: "warning",
-      status: "No location",
-      kicker: "Location",
-      title: "Location unavailable",
-      reason: error.message,
-      footer: "Try again from a place with a stronger signal."
+      status: t("checklist.errorLocationUnavailableStatus"),
+      kicker: t("checklist.kickerLocation"),
+      title: t("checklist.errorLocationUnavailableTitle"),
+      reason: t("checklist.errorLocationUnavailableReason"),
+      footer: t("checklist.errorLocationUnavailableFooter")
     };
   }
 
   if (error instanceof WeatherFetchError) {
     return {
       kind: "error",
-      status: "No weather",
-      kicker: "Weather",
-      title: "Weather unavailable",
-      reason: error.message,
-      footer: "No recommendation shown because the forecast could not be checked."
+      status: t("checklist.errorWeatherUnavailableStatus"),
+      kicker: t("checklist.kickerWeather"),
+      title: t("checklist.errorWeatherUnavailableTitle"),
+      reason: t("checklist.errorWeatherUnavailableReason"),
+      footer: t("checklist.errorWeatherUnavailableFooter")
     };
   }
 
   return {
     kind: "error",
-    status: "Error",
-    kicker: "Error",
-    title: "Something went wrong",
-    reason: "The recommendation could not be made.",
-    footer: "Try again in a moment."
+    status: t("checklist.errorGenericStatus"),
+    kicker: t("checklist.kickerError"),
+    title: t("checklist.errorGenericTitle"),
+    reason: t("checklist.errorGenericReason"),
+    footer: t("checklist.errorGenericFooter")
   };
 }
 
@@ -405,7 +440,7 @@ export function saveLocationForThisDevice(location) {
       savedAt: new Date().toISOString()
     }));
   } catch (error) {
-    elements.appStatus.textContent = "Location could not be saved on this device.";
+    elements.appStatus.textContent = t("checklist.locationSaveFailedStatus");
   }
 }
 

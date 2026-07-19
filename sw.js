@@ -1,6 +1,6 @@
 // Bump APP_VERSION whenever cached app shell or icon assets need to be refreshed
 // for installed PWAs.
-const APP_VERSION = "icon-strap-smoothing";
+const APP_VERSION = "i18n-feedback-notification-copy";
 const CACHE_NAME = `ready-${APP_VERSION}`;
 
 // Core assets use network-first caching so pilot deployments are less likely to
@@ -22,17 +22,24 @@ const CORE_ASSETS = [
   "./src/services/location.js",
   "./src/services/notificationsApi.js",
   "./src/services/pilotAnalytics.js",
+  "./src/services/analytics.js",
   "./src/domain/recommendation.js",
   "./src/domain/personalizedChecklist.js",
   "./src/domain/clothingPreferences.js",
   "./src/domain/reminders.js",
+  "./src/i18n/i18n.js",
+  "./src/i18n/domainStrings.js",
+  "./src/i18n/translations/en.js",
+  "./src/i18n/translations/es.js",
   "./src/features/onboarding/onboarding.js",
   "./src/features/checklist/checklist.js",
   "./src/features/weatherScreen/weatherScreen.js",
   "./src/features/settings/timeAway.js",
   "./src/features/settings/routineStart.js",
+  "./src/features/settings/language.js",
   "./src/features/notifications/notificationSettings.js",
   "./src/features/clothingPreferences/clothingPreferencesUI.js",
+  "./src/features/feedback/feedbackPrompt.js",
   "./src/features/pwa/serviceWorkerClient.js",
   "./src/features/share/shareFab.js"
 ];

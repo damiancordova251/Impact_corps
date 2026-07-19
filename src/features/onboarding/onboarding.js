@@ -6,6 +6,7 @@ import {
 } from "../../constants/storageKeys.js";
 import { formatHourLabel, formatTimeLabel } from "../../utils/format.js";
 import { prefersReducedMotion } from "../../utils/browser.js";
+import { t } from "../../i18n/i18n.js";
 import { getCurrentLocation } from "../../services/location.js";
 import { fetchTodayWeather, WeatherFetchError } from "../../services/weather.js";
 import { requestNotificationPermission } from "../../services/notificationsApi.js";
@@ -127,7 +128,7 @@ function showOnboardingStep(step, options = {}) {
   }
 
   if (step === "reminders" && state.onboardingReminderCanContinue) {
-    elements.onboardingPrimary.textContent = "Continue";
+    elements.onboardingPrimary.textContent = t("onboarding.remindersContinue");
   }
 
   if (step === "creating") {
@@ -140,58 +141,58 @@ function showOnboardingStep(step, options = {}) {
 function getOnboardingStepCopy(step) {
   const copy = {
     welcome: {
-      progress: "Step 1 of 8",
-      kicker: "Welcome",
-      title: "Hello!",
-      body: "This is Ready, your on-the-go clothing checklist for the day's weather.",
-      primaryLabel: "Get Started"
+      progress: t("onboarding.welcomeProgress"),
+      kicker: t("onboarding.welcomeKicker"),
+      title: t("onboarding.welcomeTitle"),
+      body: t("onboarding.welcomeBody"),
+      primaryLabel: t("onboarding.welcomePrimary")
     },
     setup: {
-      progress: "Step 2 of 8",
-      kicker: "Setup",
-      title: "Let's set up your checklist",
-      body: "Ready asks a few quick questions so your checklist matches your day, your schedule, and the clothes you actually wear.",
-      primaryLabel: "Continue",
-      secondaryLabel: "Skip setup"
+      progress: t("onboarding.setupProgress"),
+      kicker: t("onboarding.setupKicker"),
+      title: t("onboarding.setupTitle"),
+      body: t("onboarding.setupBody"),
+      primaryLabel: t("onboarding.setupPrimary"),
+      secondaryLabel: t("onboarding.setupSecondary")
     },
     location: {
-      progress: "Step 3 of 8",
-      kicker: "Location",
-      title: "Where should Ready check the weather?",
-      body: "Ready needs your general location to create accurate clothing recommendations for today's weather.",
-      primaryLabel: "Use Current Location",
+      progress: t("onboarding.locationProgress"),
+      kicker: t("onboarding.locationKicker"),
+      title: t("onboarding.locationTitle"),
+      body: t("onboarding.locationBody"),
+      primaryLabel: t("onboarding.locationPrimary"),
       visualClass: "is-location"
     },
     routine: {
-      progress: "Step 4 of 8",
-      kicker: "Schedule",
-      title: "When do you usually leave home?",
-      body: "Ready can time reminders around when you normally start your day.",
-      primaryLabel: "Continue",
-      secondaryLabel: "Skip"
+      progress: t("onboarding.routineProgress"),
+      kicker: t("onboarding.routineKicker"),
+      title: t("onboarding.routineTitle"),
+      body: t("onboarding.routineBody"),
+      primaryLabel: t("onboarding.routinePrimary"),
+      secondaryLabel: t("onboarding.routineSecondary")
     },
     timeAway: {
-      progress: "Step 5 of 8",
-      kicker: "Forecast Window",
-      title: "How long are you usually away?",
-      body: "Ready uses this window to check the weather you are likely to run into.",
-      primaryLabel: "Continue",
-      secondaryLabel: "Skip"
+      progress: t("onboarding.timeAwayProgress"),
+      kicker: t("onboarding.timeAwayKicker"),
+      title: t("onboarding.timeAwayTitle"),
+      body: t("onboarding.timeAwayBody"),
+      primaryLabel: t("onboarding.timeAwayPrimary"),
+      secondaryLabel: t("onboarding.timeAwaySecondary")
     },
     reminders: {
-      progress: "Step 7 of 8",
-      kicker: "Reminders",
-      title: "Want Ready to remind you?",
-      body: "Ready can send a daily reminder so your checklist is ready before you leave.",
-      primaryLabel: "Enable Reminders",
-      secondaryLabel: "Not Now"
+      progress: t("onboarding.remindersProgress"),
+      kicker: t("onboarding.remindersKicker"),
+      title: t("onboarding.remindersTitle"),
+      body: t("onboarding.remindersBody"),
+      primaryLabel: t("onboarding.remindersPrimary"),
+      secondaryLabel: t("onboarding.remindersSecondary")
     },
     creating: {
-      progress: "Step 8 of 8",
-      kicker: "Almost There",
-      title: "Creating your checklist",
-      body: "Checking weather, layers, and accessories…",
-      primaryLabel: "Creating..."
+      progress: t("onboarding.creatingProgress"),
+      kicker: t("onboarding.creatingKicker"),
+      title: t("onboarding.creatingTitle"),
+      body: t("onboarding.creatingBody"),
+      primaryLabel: t("onboarding.creatingPrimary")
     }
   };
 
@@ -265,7 +266,7 @@ async function handleOnboardingLocationRequest() {
   const requestedAt = new Date();
 
   elements.onboardingPrimary.disabled = true;
-  elements.onboardingMessage.textContent = "Getting your location...";
+  elements.onboardingMessage.textContent = t("onboarding.gettingLocation");
 
   try {
     const location = await getCurrentLocation();
@@ -274,7 +275,7 @@ async function handleOnboardingLocationRequest() {
     saveLocationForThisDevice(state.latestLocation);
     renderNotificationSetting();
     trackPilotEvent("location_updated", { source: "onboarding" });
-    elements.onboardingMessage.textContent = "Checking today's weather...";
+    elements.onboardingMessage.textContent = t("onboarding.checkingWeather");
 
     state.onboardingWeather = await fetchTodayWeather(location);
     state.onboardingRequestedAt = requestedAt;
@@ -295,12 +296,12 @@ async function handleOnboardingEnableReminders() {
   state.onboardingReminderCanContinue = false;
   elements.onboardingPrimary.disabled = true;
   elements.onboardingSecondary.disabled = true;
-  elements.onboardingMessage.textContent = "Requesting notification permission...";
+  elements.onboardingMessage.textContent = t("onboarding.requestingPermission");
 
   const permission = await requestNotificationPermission();
 
   if (permission === "granted") {
-    await syncPushReminderSubscription("Notifications enabled. Saving server reminder...");
+    await syncPushReminderSubscription(t("notifications.notificationsEnabledSaving"));
     showOnboardingStep("creating");
     return;
   }
@@ -311,20 +312,20 @@ async function handleOnboardingEnableReminders() {
 
   if (permission === "denied") {
     showOnboardingStep("reminders", {
-      message: "Notifications are blocked. You can continue now and enable reminders later from Settings."
+      message: t("onboarding.remindersBlocked")
     });
     return;
   }
 
   if (permission === "default") {
     showOnboardingStep("reminders", {
-      message: "Notification permission was not granted. You can continue now and enable reminders later from Settings."
+      message: t("onboarding.remindersNotGranted")
     });
     return;
   }
 
   showOnboardingStep("reminders", {
-    message: "Notifications are not supported here yet. You can continue without reminders."
+    message: t("onboarding.remindersUnsupported")
   });
 }
 
@@ -335,7 +336,7 @@ function runOnboardingChecklistCreation() {
 
   if (!state.onboardingWeather) {
     showOnboardingStep("location", {
-      message: "Ready needs your general location before creating a checklist."
+      message: t("onboarding.needsLocationForChecklist")
     });
     return;
   }
@@ -352,7 +353,7 @@ function runOnboardingChecklistCreation() {
     elements.onboardingScreen.hidden = true;
     state.startupFlowStarted = true;
     state.onboardingCompleting = false;
-    elements.appStatus.textContent = "Setup complete. You can change everything later in Settings.";
+    elements.appStatus.textContent = t("onboarding.setupComplete");
     showScreen("checklist");
   }, prefersReducedMotion() ? 120 : 850);
 }
@@ -381,7 +382,7 @@ function renderOnboardingRoutineControl() {
   const currentMinutes = getSavedRoutineStartTime();
 
   wrapper.className = "onboarding-slider-control";
-  wrapper.textContent = "Leave time";
+  wrapper.textContent = t("onboarding.routineLeaveTime");
   value.textContent = formatTimeLabel(currentMinutes);
   input.className = "routine-start-slider";
   input.type = "range";
@@ -402,7 +403,7 @@ function renderOnboardingLocationControl() {
   const helper = document.createElement("p");
 
   helper.className = "onboarding-helper";
-  helper.textContent = "Location stays on this device only. You can change browser location permission later in Safari or your browser settings.";
+  helper.textContent = t("onboarding.locationHelper");
   elements.onboardingControl.replaceChildren(helper);
 }
 
@@ -412,7 +413,7 @@ function renderOnboardingProgressBar() {
 
   progress.className = "onboarding-loading-bar";
   progress.setAttribute("role", "progressbar");
-  progress.setAttribute("aria-label", "Creating checklist");
+  progress.setAttribute("aria-label", t("onboarding.creatingAriaLabel"));
   progress.append(bar);
   elements.onboardingControl.replaceChildren(progress);
 }
@@ -425,7 +426,7 @@ function renderOnboardingTimeAwayControl() {
 
   group.className = "onboarding-option-grid";
   group.setAttribute("role", "radiogroup");
-  group.setAttribute("aria-label", "Expected time away");
+  group.setAttribute("aria-label", t("onboarding.expectedTimeAwayAriaLabel"));
   group.replaceChildren(...TIME_AWAY_OPTIONS.map((hours) => createOnboardingTimeAwayOption(hours, hours === currentHours)));
   elements.onboardingControl.replaceChildren(group);
 }
@@ -465,10 +466,10 @@ function getOnboardingTimeAwayValue() {
 
 function getOnboardingLocationError(error) {
   if (error instanceof WeatherFetchError) {
-    return "Ready found your location, but could not check the weather yet. Please try again.";
+    return t("onboarding.locationErrorWeatherFailed");
   }
 
-  return "Ready needs your general location to create an accurate clothing checklist. Please allow location access to continue.";
+  return t("onboarding.locationErrorGeneric");
 }
 
 function hasCompletedOnboarding() {

@@ -9,7 +9,46 @@ This document summarizes what has been built so far for the Impact Corps / Ready
 - The frontend was reorganized from one 1667-line `src/app.js` into feature-scoped modules under `src/{constants,state,dom,utils,services,domain,features}/`. `src/app.js` is now a thin bootstrap. See the updated "Files Worth Knowing" list below for the new paths.
 - A referral/share feature was added: a floating share button (`src/features/share/shareFab.js`) opens a confirmation modal, then uses the native Web Share API where available, falling back to clipboard copy (and, as a last resort, showing the message inline for manual copy). The shared link is always `window.location.origin`, never a hardcoded domain, since Render and Cloudflare Pages are different origins.
 - Reminder notifications can now be turned off, not just on. The Settings button toggles between "Enable reminders" / "Disable reminders"; disabling unsubscribes the browser `PushSubscription` and deletes the matching Supabase row via a new `DELETE /api/push/subscriptions/:id` route (added to both the Express server and Cloudflare Pages Functions at `functions/api/push/subscriptions/[id].js`). This is what actually cancels scheduled reminders, not just local UI state.
-- The app icon's top strap-loop arc was recentered (it was 18px off from the body's true center) so the backpack mark is symmetric; PNGs are regenerated from the SVG via `npm run generate:icons` (uses `sharp`, a new devDependency).
+- The app icon's top strap-loop arc was recentered (it was 18px off from the body's true center) so the backpack mark is symmetric; PNGs are regenerated from the SVG via `npm run generate:icons` (uses `sharp`, a new devDependency). A later pass reverted the checkmark/clasp edits from that round and instead smoothed the side straps' attachment to the body (they met the wall via a straight connector, creating a hard right-angle notch — replaced with a continuous curve).
+- The share button was nudged down slightly (`bottom: 76px` instead of `88px`).
+
+## Recent Update (English/Spanish i18n, Feedback Prompt, Notification Content Groundwork)
+
+- Full English/Spanish i18n: a hand-built `src/i18n/` (no dependency — plain `.js` translation
+  objects rather than `.json` module imports, since Safari's support for JSON import attributes is
+  inconsistent across this pilot's target iOS versions). `t(key, params)` does dot-path lookup with
+  `{param}` substitution; `getLocale()`/`setLocale()` persist to `readyLanguage` in localStorage,
+  falling back to browser-language detection, then English. Switching language saves the
+  preference and reloads (deliberately not a live in-place re-render — see the comment in
+  `src/features/settings/language.js` for why). A language `<select>` lives at the bottom of
+  Settings.
+- `domain/recommendation.js`'s output shape changed from pre-formatted English strings to
+  structured, translatable descriptors (`{type: "clothingGroup", category, weightLabel, options}` /
+  `{type: "accessory", options}` for items; `{key, params}` for reasons) — `features/checklist/checklist.js`
+  composes and translates at render time via `src/i18n/domainStrings.js`, a lookup dictionary that
+  translates canonical clothing-item/weight/purpose-label strings for *display* only, keeping the
+  actual stored/canonical strings in English so existing users' saved clothing preferences in
+  localStorage never need migrating. `tests/recommendation.test.js` was updated to assert against
+  the new structured shape instead of composed strings.
+- A three-day feedback prompt (`src/features/feedback/feedbackPrompt.js`) shows once a user has
+  opened the app on 3 distinct calendar days (tracked locally), gated behind onboarding-complete
+  and a cooldown after "Remind me later" (3 days) or dismiss (14 days). It posts to `POST
+  /api/feedback`, which does not exist yet — see below.
+- `server/notificationCopy.js`: a pure, dependency-free module that picks one of a small set of
+  bilingual, weather-aware scheduled-reminder message variants (rain/cold/warm/generic) from a
+  coarse weather summary. Deliberately **not wired into `server/pushService.js` or the Cloudflare
+  Worker yet** — that requires the scheduler to have a coarse location to fetch weather from at
+  send time, which is part of the deferred Supabase schema work below.
+- **Deferred (by explicit request) to a follow-up round, discussed together:** the expanded
+  Supabase analytics schema (installations/sessions/events/recommendations/notifications/referrals/
+  feedback/errors tables, RLS, migrations, `POST /api/analytics/events` and `POST /api/feedback`
+  backend endpoints) and the weather forecast-accuracy pipeline (including the coarse-location
+  columns on `push_subscriptions` needed to actually wire up `notificationCopy.js`). Until that
+  lands, `src/services/analytics.js`'s `trackEvent()` and the feedback prompt's submit both hit
+  404s gracefully (fire-and-forget / friendly failure message, never a crash) — nothing is actually
+  being recorded yet.
+- See `PRE_REFERRAL_REVIEW.md` for a prioritized list of what else is worth addressing before a
+  wider pilot.
 
 ## Executive Summary
 
