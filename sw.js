@@ -1,6 +1,6 @@
 // Bump APP_VERSION whenever cached app shell or icon assets need to be refreshed
 // for installed PWAs.
-const APP_VERSION = "i18n-feedback-notification-copy";
+const APP_VERSION = "analytics-forecast-tracker";
 const CACHE_NAME = `ready-${APP_VERSION}`;
 
 // Core assets use network-first caching so pilot deployments are less likely to

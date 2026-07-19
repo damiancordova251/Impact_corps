@@ -105,6 +105,8 @@ function createFeedbackModal() {
       </div>
       <label class="feedback-comment-label" for="feedbackComment">${escapeHtml(t("feedback.commentLabel"))}</label>
       <textarea id="feedbackComment" class="feedback-comment" rows="3" placeholder="${escapeHtml(t("feedback.commentPlaceholder"))}"></textarea>
+      <label class="feedback-comment-label" for="feedbackClothingSuggestions">${escapeHtml(t("feedback.clothingSuggestionsLabel"))}</label>
+      <textarea id="feedbackClothingSuggestions" class="feedback-comment" rows="2" placeholder="${escapeHtml(t("feedback.clothingSuggestionsPlaceholder"))}"></textarea>
       <p class="share-modal-message feedback-message" aria-live="polite"></p>
       <div class="share-modal-actions feedback-actions">
         <button type="button" class="secondary-action feedback-dismiss">${escapeHtml(t("feedback.dismiss"))}</button>
@@ -147,12 +149,13 @@ async function handleSubmit(overlay) {
   const messageEl = overlay.querySelector(".feedback-message");
   const rating = Number(overlay.querySelector("input[name='feedbackRating']:checked")?.value) || null;
   const comment = overlay.querySelector("#feedbackComment").value.trim().slice(0, 2000);
+  const clothingSuggestions = overlay.querySelector("#feedbackClothingSuggestions").value.trim().slice(0, 500);
 
   submitButton.disabled = true;
 
   try {
-    await postFeedback({ rating, comment });
-    trackEvent("feedback_submitted", { hasRating: rating !== null, hasComment: comment.length > 0 });
+    await postFeedback({ rating, comment, clothingSuggestions });
+    trackEvent("feedback_submitted", { hasRating: rating !== null, hasComment: comment.length > 0, hasClothingSuggestions: clothingSuggestions.length > 0 });
     writePromptState({ status: "submitted", lastShownAt: new Date().toISOString(), submittedAt: new Date().toISOString() });
     messageEl.textContent = t("feedback.thanks");
     window.setTimeout(() => closeModal(overlay), 1200);
@@ -162,7 +165,7 @@ async function handleSubmit(overlay) {
   }
 }
 
-async function postFeedback({ rating, comment }) {
+async function postFeedback({ rating, comment, clothingSuggestions }) {
   const installationId = getInstallationId();
   const response = await fetch(apiUrl("/api/feedback"), {
     method: "POST",
@@ -171,6 +174,7 @@ async function postFeedback({ rating, comment }) {
       installationId,
       rating,
       comment,
+      clothingSuggestions,
       language: getLocale(),
       appVersion: APP_CONFIG.appVersion,
       fromScheduledPrompt: true

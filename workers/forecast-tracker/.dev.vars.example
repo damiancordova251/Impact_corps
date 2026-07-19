@@ -1,0 +1,7 @@
+SUPABASE_URL=https://your-project-ref.supabase.co
+SUPABASE_SERVICE_ROLE_KEY=your_backend_only_service_role_key
+SUPABASE_PUSH_SUBSCRIPTIONS_TABLE=push_subscriptions
+SUPABASE_FORECAST_PREDICTIONS_TABLE=forecast_predictions
+SUPABASE_FORECAST_ACTUALS_TABLE=forecast_actuals
+FORECAST_HORIZON_HOURS=6,12,24
+DRY_RUN=true

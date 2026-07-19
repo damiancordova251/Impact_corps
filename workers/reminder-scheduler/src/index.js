@@ -1,8 +1,10 @@
 import { buildPushPayload } from "@block65/webcrypto-web-push";
+import { buildNotificationCopy } from "./notificationCopy.js";
 
 const DEFAULT_TABLE_NAME = "push_subscriptions";
 const DEFAULT_CRON_WINDOW_MINUTES = 5;
-const REMINDER = {
+const OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast";
+const FALLBACK_REMINDER = {
   title: "Ready Checklist",
   body: "Your weather checklist is ready.",
   tag: "ready-checklist-test",
@@ -79,7 +81,7 @@ async function getSubscriptions(env) {
   const response = await supabaseFetch(env, {
     path: tablePath(env),
     searchParams: new URLSearchParams({
-      select: "id,subscription,routine_start_minutes,timezone,last_sent_date,created_at,updated_at",
+      select: "id,subscription,routine_start_minutes,timezone,coarse_latitude,coarse_longitude,preferred_language,last_sent_date,created_at,updated_at",
       order: "created_at.asc"
     })
   });
@@ -121,14 +123,18 @@ async function removeSubscription(id, env) {
   });
 }
 
+// Weather-aware when the subscription has a coarse location saved (see
+// server/pushService.js for the same logic on the Express side); falls back
+// to the existing generic reminder on missing location or any fetch failure.
 async function sendReadyChecklistPush(record, env) {
   const vapid = {
     subject: env.VAPID_SUBJECT,
     publicKey: env.VAPID_PUBLIC_KEY,
     privateKey: env.VAPID_PRIVATE_KEY
   };
+  const reminder = await buildReminderPayload(record);
   const message = {
-    data: REMINDER,
+    data: reminder,
     options: {
       ttl: 60 * 60,
       topic: "ready-checklist"
@@ -142,6 +148,63 @@ async function sendReadyChecklistPush(record, env) {
   }
 
   throw new PushSendError(response.status, await response.text().catch(() => ""));
+}
+
+async function buildReminderPayload(record) {
+  if (!Number.isFinite(record.coarseLatitude) || !Number.isFinite(record.coarseLongitude)) {
+    return FALLBACK_REMINDER;
+  }
+
+  try {
+    const weatherSummary = await fetchCoarseWeatherSummary(record.coarseLatitude, record.coarseLongitude);
+    const copy = buildNotificationCopy({
+      language: record.preferredLanguage ?? "en",
+      weatherSummary
+    });
+
+    return { ...FALLBACK_REMINDER, title: copy.title, body: copy.body };
+  } catch (error) {
+    return FALLBACK_REMINDER;
+  }
+}
+
+async function fetchCoarseWeatherSummary(latitude, longitude) {
+  const url = new URL(OPEN_METEO_URL);
+
+  url.search = new URLSearchParams({
+    latitude: latitude.toFixed(1),
+    longitude: longitude.toFixed(1),
+    current: "temperature_2m,apparent_temperature",
+    daily: "temperature_2m_max,precipitation_probability_max",
+    temperature_unit: "fahrenheit",
+    timezone: "auto",
+    forecast_days: "1"
+  }).toString();
+
+  const response = await fetch(url);
+
+  if (!response.ok) {
+    throw new Error(`Open-Meteo request failed with ${response.status}.`);
+  }
+
+  const data = await response.json();
+
+  return {
+    currentTemp: toWeatherNumber(data.current?.temperature_2m),
+    feelsLike: toWeatherNumber(data.current?.apparent_temperature),
+    highTemp: toWeatherNumber(data.daily?.temperature_2m_max?.[0]),
+    precipitationProbability: toWeatherNumber(data.daily?.precipitation_probability_max?.[0])
+  };
+}
+
+function toWeatherNumber(value) {
+  if (value === null || value === undefined) {
+    return null;
+  }
+
+  const number = Number(value);
+
+  return Number.isFinite(number) ? number : null;
 }
 
 async function supabaseFetch(env, { path, searchParams = new URLSearchParams(), init = {} }) {
@@ -223,6 +286,9 @@ function toRecord(row) {
     subscription: row.subscription,
     routineStartMinutes: row.routine_start_minutes,
     timezone: row.timezone,
+    coarseLatitude: row.coarse_latitude ?? null,
+    coarseLongitude: row.coarse_longitude ?? null,
+    preferredLanguage: row.preferred_language ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     lastSentDate: row.last_sent_date

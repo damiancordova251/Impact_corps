@@ -1,7 +1,7 @@
 import { elements } from "../../dom/elements.js";
 import { state } from "../../state/appState.js";
 import { formatTimeLabel } from "../../utils/format.js";
-import { t } from "../../i18n/i18n.js";
+import { getLocale, t } from "../../i18n/i18n.js";
 import { getSavedRoutineStartTime } from "../settings/routineStart.js";
 import { createChecklistReminder } from "../../domain/reminders.js";
 import { trackPilotEvent } from "../../services/pilotAnalytics.js";
@@ -131,7 +131,9 @@ export async function syncPushReminderSubscription(statusMessage) {
   try {
     const subscription = await subscribeToPushReminders({
       routineStartMinutes: getSavedRoutineStartTime(),
-      timezone: getBrowserTimezone()
+      timezone: getBrowserTimezone(),
+      location: state.latestLocation,
+      preferredLanguage: getLocale()
     });
 
     state.pushSubscriptionId = subscription.id;

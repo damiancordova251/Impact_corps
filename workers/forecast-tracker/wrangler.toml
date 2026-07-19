@@ -1,0 +1,20 @@
+name = "ready-forecast-tracker"
+main = "src/index.js"
+compatibility_date = "2026-05-22"
+compatibility_flags = ["nodejs_compat"]
+workers_dev = true
+
+[triggers]
+# Every 30 minutes: frequent enough to catch predictions whose target_time
+# just passed without a paid historical-weather API, infrequent enough to
+# stay comfortably inside Workers Free's invocation limits at pilot scale.
+crons = ["*/30 * * * *"]
+
+[vars]
+SUPABASE_PUSH_SUBSCRIPTIONS_TABLE = "push_subscriptions"
+SUPABASE_FORECAST_PREDICTIONS_TABLE = "forecast_predictions"
+SUPABASE_FORECAST_ACTUALS_TABLE = "forecast_actuals"
+# Horizons to snapshot at each run, in hours. Comma-separated so more can be
+# added later as a config change, not a code change.
+FORECAST_HORIZON_HOURS = "6,12,24"
+DRY_RUN = "true"

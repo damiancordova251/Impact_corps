@@ -63,8 +63,14 @@ export async function sendTestNotification(reminder) {
 }
 
 // Creates or reuses the browser PushSubscription, then saves the subscription
-// details to the backend for scheduled Web Push reminders.
-export async function subscribeToPushReminders({ routineStartMinutes, timezone }) {
+// details to the backend for scheduled Web Push reminders. `location`, if
+// provided, is rounded to 1 decimal degree (~11km) right here, before it's
+// ever sent — the exact coordinates never leave the device for this purpose.
+// Letting the scheduler mention weather context in a reminder is the only
+// reason any location is sent to the server at all; omit `location` (or pass
+// none) and the subscription is saved exactly as before, with the scheduler
+// falling back to its existing generic message.
+export async function subscribeToPushReminders({ routineStartMinutes, timezone, location, preferredLanguage }) {
   if (!areNotificationsSupported()) {
     throw new Error("Push notifications are not supported in this browser.");
   }
@@ -76,13 +82,30 @@ export async function subscribeToPushReminders({ routineStartMinutes, timezone }
   const registration = await navigator.serviceWorker.ready;
   const vapidPublicKey = await fetchVapidPublicKey();
   const subscription = await getOrCreatePushSubscription(registration, vapidPublicKey);
+  const coarseLocation = roundToCoarseLocation(location);
   const response = await postJson("/api/push/subscriptions", {
     subscription: subscription.toJSON(),
     routineStartMinutes,
-    timezone
+    timezone,
+    ...(coarseLocation ?? {}),
+    ...(preferredLanguage ? { preferredLanguage } : {})
   });
 
   return response.subscription;
+}
+
+function roundToCoarseLocation(location) {
+  const latitude = Number(location?.latitude);
+  const longitude = Number(location?.longitude);
+
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    return null;
+  }
+
+  return {
+    coarseLatitude: Math.round(latitude * 10) / 10,
+    coarseLongitude: Math.round(longitude * 10) / 10
+  };
 }
 
 // Removes the browser PushSubscription and deletes the matching server row so

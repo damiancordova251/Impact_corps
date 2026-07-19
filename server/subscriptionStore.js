@@ -27,6 +27,9 @@ export async function upsertSubscription(input) {
     subscription,
     routine_start_minutes: input.routineStartMinutes,
     timezone: input.timezone,
+    coarse_latitude: input.coarseLatitude ?? null,
+    coarse_longitude: input.coarseLongitude ?? null,
+    preferred_language: input.preferredLanguage ?? null,
     last_sent_date: scheduleChanged ? null : (existing?.lastSentDate ?? null),
     updated_at: now
   };
@@ -98,6 +101,8 @@ export function toPublicSubscription(record) {
     routineStartMinutes: record.routineStartMinutes,
     timezone: record.timezone,
     hasLocation: false,
+    hasCoarseLocation: record.coarseLatitude !== null && record.coarseLongitude !== null,
+    preferredLanguage: record.preferredLanguage,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
     lastSentDate: record.lastSentDate
@@ -158,6 +163,9 @@ function toRecord(row) {
     subscription: row.subscription,
     routineStartMinutes: row.routine_start_minutes,
     timezone: row.timezone,
+    coarseLatitude: row.coarse_latitude ?? null,
+    coarseLongitude: row.coarse_longitude ?? null,
+    preferredLanguage: row.preferred_language ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     lastSentDate: row.last_sent_date

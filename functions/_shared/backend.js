@@ -1,5 +1,8 @@
 const DEFAULT_PUSH_SUBSCRIPTIONS_TABLE = "push_subscriptions";
 const DEFAULT_PILOT_EVENTS_TABLE = "pilot_events";
+const DEFAULT_APP_INSTALLATIONS_TABLE = "app_installations";
+const DEFAULT_ANALYTICS_EVENTS_TABLE = "analytics_events";
+const DEFAULT_FEEDBACK_SUBMISSIONS_TABLE = "feedback_submissions";
 const MAX_JSON_BODY_LENGTH = 128 * 1024;
 const PILOT_EVENT_TYPES = new Set([
   "app_opened",
@@ -9,6 +12,34 @@ const PILOT_EVENT_TYPES = new Set([
   "notification_clicked",
   "weather_screen_viewed",
   "location_updated"
+]);
+const SUBSCRIPTION_SELECT_COLUMNS = "id,subscription,routine_start_minutes,timezone,coarse_latitude,coarse_longitude,preferred_language,last_sent_date,created_at,updated_at";
+
+// Kept in sync with src/services/analytics.js and server/analyticsService.js's
+// own allowlists.
+export const ALLOWED_EVENT_NAMES = new Set([
+  "app_installation_seen",
+  "session_started",
+  "session_ended",
+  "language_changed",
+  "share_opened",
+  "share_completed",
+  "install_instructions_viewed",
+  "notification_scheduled",
+  "notification_opened",
+  "notification_dismissed",
+  "notification_opt_in",
+  "notification_opt_out",
+  "recommendation_generated",
+  "recommendation_feedback",
+  "checklist_completed",
+  "referral_link_visited",
+  "feedback_prompt_shown",
+  "feedback_prompt_postponed",
+  "feedback_prompt_dismissed",
+  "feedback_submitted",
+  "client_error",
+  "api_performance"
 ]);
 
 // Shared API response helpers keep all Pages Functions returning JSON with the
@@ -92,6 +123,9 @@ export async function upsertSubscription(input, env) {
     subscription,
     routine_start_minutes: input.routineStartMinutes,
     timezone: input.timezone,
+    coarse_latitude: input.coarseLatitude ?? null,
+    coarse_longitude: input.coarseLongitude ?? null,
+    preferred_language: input.preferredLanguage ?? null,
     last_sent_date: scheduleChanged ? null : (existing?.lastSentDate ?? null),
     updated_at: now
   };
@@ -100,7 +134,7 @@ export async function upsertSubscription(input, env) {
     path: pushSubscriptionsTablePath(env),
     searchParams: new URLSearchParams({
       on_conflict: "id",
-      select: "id,subscription,routine_start_minutes,timezone,last_sent_date,created_at,updated_at"
+      select: SUBSCRIPTION_SELECT_COLUMNS
     }),
     init: {
       method: "POST",
@@ -125,7 +159,7 @@ export async function getSubscription(id, env) {
   const response = await supabaseFetch(env, {
     path: pushSubscriptionsTablePath(env),
     searchParams: new URLSearchParams({
-      select: "id,subscription,routine_start_minutes,timezone,last_sent_date,created_at,updated_at",
+      select: SUBSCRIPTION_SELECT_COLUMNS,
       id: `eq.${id}`,
       limit: "1"
     })
@@ -139,7 +173,7 @@ export async function getAllSubscriptions(env) {
   const response = await supabaseFetch(env, {
     path: pushSubscriptionsTablePath(env),
     searchParams: new URLSearchParams({
-      select: "id,subscription,routine_start_minutes,timezone,last_sent_date,created_at,updated_at",
+      select: SUBSCRIPTION_SELECT_COLUMNS,
       order: "created_at.asc"
     })
   });
@@ -166,10 +200,88 @@ export function toPublicSubscription(record) {
     routineStartMinutes: record.routineStartMinutes,
     timezone: record.timezone,
     hasLocation: false,
+    hasCoarseLocation: record.coarseLatitude !== null && record.coarseLongitude !== null,
+    preferredLanguage: record.preferredLanguage,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
     lastSentDate: record.lastSentDate
   };
+}
+
+// Records one analytics event and keeps app_installations.last_active_at
+// (and preferred_language, if provided) current via upsert. Mirrors
+// server/analyticsService.js's recordAnalyticsEvent for the Cloudflare
+// Pages Functions runtime.
+export async function recordAnalyticsEvent({ installationId, eventName, category, language, metadata, occurredAt }, env) {
+  await supabaseFetch(env, {
+    path: appInstallationsTablePath(env),
+    searchParams: new URLSearchParams({ on_conflict: "id" }),
+    init: {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Prefer: "resolution=merge-duplicates,return=minimal"
+      },
+      body: JSON.stringify({
+        id: installationId,
+        last_active_at: new Date().toISOString(),
+        ...(language ? { preferred_language: language } : {})
+      })
+    }
+  });
+
+  await supabaseFetch(env, {
+    path: analyticsEventsTablePath(env),
+    init: {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Prefer: "return=minimal"
+      },
+      body: JSON.stringify({
+        installation_id: installationId,
+        event_name: eventName,
+        category: category ?? null,
+        language: language ?? null,
+        metadata: metadata ?? {},
+        occurred_at: occurredAt ?? new Date().toISOString()
+      })
+    }
+  });
+}
+
+export async function recordFeedbackSubmission({
+  installationId,
+  rating,
+  comment,
+  clothingSuggestions,
+  category,
+  appVersion,
+  language,
+  fromScheduledPrompt,
+  allowFollowUp
+}, env) {
+  await supabaseFetch(env, {
+    path: feedbackSubmissionsTablePath(env),
+    init: {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Prefer: "return=minimal"
+      },
+      body: JSON.stringify({
+        installation_id: installationId,
+        rating: rating ?? null,
+        comment: comment ?? null,
+        clothing_suggestions: clothingSuggestions ?? null,
+        category: category ?? null,
+        app_version: appVersion ?? null,
+        language: language ?? null,
+        from_scheduled_prompt: Boolean(fromScheduledPrompt),
+        allow_follow_up: Boolean(allowFollowUp)
+      })
+    }
+  });
 }
 
 // Pilot event writes remain anonymous and intentionally small.
@@ -198,6 +310,7 @@ export function parseSubscriptionPayload(body) {
   const subscription = body?.subscription;
   const routineStartMinutes = Number(body?.routineStartMinutes);
   const timezone = body?.timezone;
+  const coarseLocation = parseOptionalCoarseLocation(body?.coarseLatitude, body?.coarseLongitude);
 
   if (!isValidPushSubscription(subscription)) {
     return {
@@ -220,14 +333,145 @@ export function parseSubscriptionPayload(body) {
     };
   }
 
+  if (coarseLocation === undefined) {
+    return {
+      ok: false,
+      error: "coarseLatitude and coarseLongitude must both be finite numbers, or both omitted."
+    };
+  }
+
   return {
     ok: true,
     value: {
       subscription,
       routineStartMinutes,
-      timezone
+      timezone,
+      coarseLatitude: coarseLocation?.coarseLatitude ?? null,
+      coarseLongitude: coarseLocation?.coarseLongitude ?? null,
+      preferredLanguage: isValidLanguage(body?.preferredLanguage) ? body.preferredLanguage : null
     }
   };
+}
+
+function parseOptionalCoarseLocation(rawLatitude, rawLongitude) {
+  if (rawLatitude === undefined && rawLongitude === undefined) {
+    return null;
+  }
+
+  const coarseLatitude = Number(rawLatitude);
+  const coarseLongitude = Number(rawLongitude);
+
+  if (
+    !Number.isFinite(coarseLatitude) || coarseLatitude < -90 || coarseLatitude > 90
+    || !Number.isFinite(coarseLongitude) || coarseLongitude < -180 || coarseLongitude > 180
+  ) {
+    return undefined;
+  }
+
+  return { coarseLatitude, coarseLongitude };
+}
+
+function isValidLanguage(value) {
+  return typeof value === "string" && /^[a-z]{2}$/.test(value);
+}
+
+export function parseAnalyticsEventPayload(body) {
+  const installationId = body?.installationId;
+  const eventName = body?.eventName;
+
+  if (!isValidAnonymousDeviceId(installationId)) {
+    return {
+      ok: false,
+      error: "A valid installation id is required."
+    };
+  }
+
+  if (typeof eventName !== "string" || !ALLOWED_EVENT_NAMES.has(eventName)) {
+    return {
+      ok: false,
+      error: "A valid event name is required."
+    };
+  }
+
+  return {
+    ok: true,
+    value: {
+      installationId,
+      eventName,
+      category: typeof body?.category === "string" ? body.category.slice(0, 40) : null,
+      language: isValidLanguage(body?.language) ? body.language : null,
+      metadata: sanitizeAnalyticsMetadata(body?.metadata),
+      occurredAt: isValidIsoDate(body?.occurredAt) ? body.occurredAt : new Date().toISOString()
+    }
+  };
+}
+
+export function parseFeedbackPayload(body) {
+  const installationId = body?.installationId;
+
+  if (!isValidAnonymousDeviceId(installationId)) {
+    return {
+      ok: false,
+      error: "A valid installation id is required."
+    };
+  }
+
+  const rating = Number.isInteger(body?.rating) && body.rating >= 1 && body.rating <= 5
+    ? body.rating
+    : null;
+  const comment = typeof body?.comment === "string" ? body.comment.slice(0, 2000) : null;
+  const clothingSuggestions = typeof body?.clothingSuggestions === "string"
+    ? body.clothingSuggestions.slice(0, 500)
+    : null;
+
+  return {
+    ok: true,
+    value: {
+      installationId,
+      rating,
+      comment,
+      clothingSuggestions,
+      category: typeof body?.category === "string" ? body.category.slice(0, 40) : null,
+      appVersion: typeof body?.appVersion === "string" ? body.appVersion.slice(0, 20) : null,
+      language: isValidLanguage(body?.language) ? body.language : null,
+      fromScheduledPrompt: Boolean(body?.fromScheduledPrompt),
+      allowFollowUp: Boolean(body?.allowFollowUp)
+    }
+  };
+}
+
+function isValidIsoDate(value) {
+  return typeof value === "string" && !Number.isNaN(Date.parse(value));
+}
+
+function sanitizeAnalyticsMetadata(metadata) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return {};
+  }
+
+  const clean = {};
+
+  Object.entries(metadata).forEach(([key, value]) => {
+    if (typeof key !== "string" || key.length > 60) {
+      return;
+    }
+
+    if (typeof value === "string") {
+      clean[key] = value.slice(0, 200);
+      return;
+    }
+
+    if (typeof value === "number" && Number.isFinite(value)) {
+      clean[key] = value;
+      return;
+    }
+
+    if (typeof value === "boolean") {
+      clean[key] = value;
+    }
+  });
+
+  return clean;
 }
 
 export function parsePilotEventPayload(body) {
@@ -321,12 +565,27 @@ function pilotEventsTablePath(env) {
   return encodeURIComponent(env.SUPABASE_PILOT_EVENTS_TABLE || DEFAULT_PILOT_EVENTS_TABLE);
 }
 
+function appInstallationsTablePath(env) {
+  return encodeURIComponent(env.SUPABASE_APP_INSTALLATIONS_TABLE || DEFAULT_APP_INSTALLATIONS_TABLE);
+}
+
+function analyticsEventsTablePath(env) {
+  return encodeURIComponent(env.SUPABASE_ANALYTICS_EVENTS_TABLE || DEFAULT_ANALYTICS_EVENTS_TABLE);
+}
+
+function feedbackSubmissionsTablePath(env) {
+  return encodeURIComponent(env.SUPABASE_FEEDBACK_SUBMISSIONS_TABLE || DEFAULT_FEEDBACK_SUBMISSIONS_TABLE);
+}
+
 function toSubscriptionRecord(row) {
   return {
     id: row.id,
     subscription: row.subscription,
     routineStartMinutes: row.routine_start_minutes,
     timezone: row.timezone,
+    coarseLatitude: row.coarse_latitude ?? null,
+    coarseLongitude: row.coarse_longitude ?? null,
+    preferredLanguage: row.preferred_language ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     lastSentDate: row.last_sent_date

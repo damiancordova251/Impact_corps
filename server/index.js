@@ -24,6 +24,12 @@ import {
   isPilotEventStoreConfigured
 } from "./pilotEventStore.js";
 import {
+  ALLOWED_EVENT_NAMES,
+  isAnalyticsStoreConfigured,
+  recordAnalyticsEvent,
+  recordFeedbackSubmission
+} from "./analyticsService.js";
+import {
   isValidRoutineStartMinutes,
   isValidTimezone
 } from "./time.js";
@@ -206,6 +212,53 @@ app.post("/api/pilot-events", async (req, res) => {
   }
 });
 
+// Accepts the expanded analytics event stream from src/services/analytics.js.
+// Soft-fails like /api/pilot-events: analytics must never break the app.
+app.post("/api/analytics/events", async (req, res) => {
+  if (!isAnalyticsStoreConfigured()) {
+    res.status(202).json({ ok: false });
+    return;
+  }
+
+  const parsed = parseAnalyticsEventPayload(req.body);
+
+  if (!parsed.ok) {
+    res.status(400).json({ error: parsed.error });
+    return;
+  }
+
+  try {
+    await recordAnalyticsEvent(parsed.value);
+    res.status(204).send();
+  } catch (error) {
+    console.error("Analytics event logging failed.", error);
+    res.status(202).json({ ok: false });
+  }
+});
+
+// Accepts a feedback-prompt submission (rating + optional comment).
+app.post("/api/feedback", async (req, res) => {
+  if (!isAnalyticsStoreConfigured()) {
+    res.status(503).json({ error: "Feedback storage is not configured." });
+    return;
+  }
+
+  const parsed = parseFeedbackPayload(req.body);
+
+  if (!parsed.ok) {
+    res.status(400).json({ error: parsed.error });
+    return;
+  }
+
+  try {
+    await recordFeedbackSubmission(parsed.value);
+    res.status(204).send();
+  } catch (error) {
+    console.error("Feedback submission failed.", error);
+    res.status(503).json({ error: "Feedback could not be saved right now." });
+  }
+});
+
 servePwaFiles(app);
 
 // Starts the web server first, then starts scheduled reminders only when VAPID
@@ -257,10 +310,14 @@ function isExpressSchedulerEnabled() {
 }
 
 // Validates the subscription payload before it reaches Supabase or Web Push.
+// coarseLatitude/coarseLongitude/preferredLanguage are optional: existing
+// clients (and the fallback if a user declines) omit them entirely, and the
+// scheduler falls back to the generic reminder message when they're absent.
 function parseSubscriptionPayload(body) {
   const subscription = body?.subscription;
   const routineStartMinutes = Number(body?.routineStartMinutes);
   const timezone = body?.timezone;
+  const coarseLocation = parseOptionalCoarseLocation(body?.coarseLatitude, body?.coarseLongitude);
 
   if (!isValidPushSubscription(subscription)) {
     return {
@@ -283,14 +340,153 @@ function parseSubscriptionPayload(body) {
     };
   }
 
+  if (coarseLocation === undefined) {
+    return {
+      ok: false,
+      error: "coarseLatitude and coarseLongitude must both be finite numbers, or both omitted."
+    };
+  }
+
   return {
     ok: true,
     value: {
       subscription,
       routineStartMinutes,
-      timezone
+      timezone,
+      coarseLatitude: coarseLocation?.coarseLatitude ?? null,
+      coarseLongitude: coarseLocation?.coarseLongitude ?? null,
+      preferredLanguage: isValidLanguage(body?.preferredLanguage) ? body.preferredLanguage : null
     }
   };
+}
+
+// Returns null when both are omitted (valid — coarse location is optional),
+// an object when both are present and finite, or undefined for a malformed
+// partial/invalid pair (rejected by the caller).
+function parseOptionalCoarseLocation(rawLatitude, rawLongitude) {
+  if (rawLatitude === undefined && rawLongitude === undefined) {
+    return null;
+  }
+
+  const coarseLatitude = Number(rawLatitude);
+  const coarseLongitude = Number(rawLongitude);
+
+  if (
+    !Number.isFinite(coarseLatitude) || coarseLatitude < -90 || coarseLatitude > 90
+    || !Number.isFinite(coarseLongitude) || coarseLongitude < -180 || coarseLongitude > 180
+  ) {
+    return undefined;
+  }
+
+  return { coarseLatitude, coarseLongitude };
+}
+
+function isValidLanguage(value) {
+  return typeof value === "string" && /^[a-z]{2}$/.test(value);
+}
+
+// Validates the general analytics event payload from src/services/analytics.js.
+function parseAnalyticsEventPayload(body) {
+  const installationId = body?.installationId;
+  const eventName = body?.eventName;
+
+  if (!isValidAnonymousDeviceId(installationId)) {
+    return {
+      ok: false,
+      error: "A valid installation id is required."
+    };
+  }
+
+  if (typeof eventName !== "string" || !ALLOWED_EVENT_NAMES.has(eventName)) {
+    return {
+      ok: false,
+      error: "A valid event name is required."
+    };
+  }
+
+  return {
+    ok: true,
+    value: {
+      installationId,
+      eventName,
+      category: typeof body?.category === "string" ? body.category.slice(0, 40) : null,
+      language: isValidLanguage(body?.language) ? body.language : null,
+      metadata: sanitizeAnalyticsMetadata(body?.metadata),
+      occurredAt: isValidIsoDate(body?.occurredAt) ? body.occurredAt : new Date().toISOString()
+    }
+  };
+}
+
+// Validates a feedback-prompt submission.
+function parseFeedbackPayload(body) {
+  const installationId = body?.installationId;
+
+  if (!isValidAnonymousDeviceId(installationId)) {
+    return {
+      ok: false,
+      error: "A valid installation id is required."
+    };
+  }
+
+  const rating = Number.isInteger(body?.rating) && body.rating >= 1 && body.rating <= 5
+    ? body.rating
+    : null;
+  const comment = typeof body?.comment === "string" ? body.comment.slice(0, 2000) : null;
+  const clothingSuggestions = typeof body?.clothingSuggestions === "string"
+    ? body.clothingSuggestions.slice(0, 500)
+    : null;
+
+  return {
+    ok: true,
+    value: {
+      installationId,
+      rating,
+      comment,
+      clothingSuggestions,
+      category: typeof body?.category === "string" ? body.category.slice(0, 40) : null,
+      appVersion: typeof body?.appVersion === "string" ? body.appVersion.slice(0, 20) : null,
+      language: isValidLanguage(body?.language) ? body.language : null,
+      fromScheduledPrompt: Boolean(body?.fromScheduledPrompt),
+      allowFollowUp: Boolean(body?.allowFollowUp)
+    }
+  };
+}
+
+function isValidIsoDate(value) {
+  return typeof value === "string" && !Number.isNaN(Date.parse(value));
+}
+
+// Bounded, allow-listed fields only, mirroring sanitizePilotEventMetadata's
+// approach but generalized since analytics_events' metadata shape varies by
+// event name.
+function sanitizeAnalyticsMetadata(metadata) {
+  if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) {
+    return {};
+  }
+
+  const clean = {};
+
+  Object.entries(metadata).forEach(([key, value]) => {
+    if (typeof key !== "string" || key.length > 60) {
+      return;
+    }
+
+    if (typeof value === "string") {
+      clean[key] = value.slice(0, 200);
+      return;
+    }
+
+    if (typeof value === "number" && Number.isFinite(value)) {
+      clean[key] = value;
+      return;
+    }
+
+    if (typeof value === "boolean") {
+      clean[key] = value;
+    }
+  });
+
+  return clean;
 }
 
 function isValidPushSubscription(subscription) {
