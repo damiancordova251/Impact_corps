@@ -11,6 +11,7 @@ import { getCurrentLocation } from "../../services/location.js";
 import { fetchTodayWeather, WeatherFetchError } from "../../services/weather.js";
 import { requestNotificationPermission } from "../../services/notificationsApi.js";
 import { trackPilotEvent } from "../../services/pilotAnalytics.js";
+import { convertPendingReferralVisit } from "../../services/referralApi.js";
 import { hasCompletedClothingPreferences, markClothingPreferencesSkipped } from "../../domain/clothingPreferences.js";
 import {
   DEFAULT_ROUTINE_START_MINUTES,
@@ -498,6 +499,7 @@ function markOnboardingComplete() {
     return false;
   }
 
+  convertPendingReferralVisit();
   return true;
 }
 

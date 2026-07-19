@@ -2,6 +2,7 @@ import { buildPushPayload } from "@block65/webcrypto-web-push";
 import { buildNotificationCopy } from "./notificationCopy.js";
 
 const DEFAULT_TABLE_NAME = "push_subscriptions";
+const DEFAULT_NOTIFICATION_EVENTS_TABLE = "notification_events";
 const DEFAULT_CRON_WINDOW_MINUTES = 5;
 const OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast";
 const FALLBACK_REMINDER = {
@@ -81,7 +82,7 @@ async function getSubscriptions(env) {
   const response = await supabaseFetch(env, {
     path: tablePath(env),
     searchParams: new URLSearchParams({
-      select: "id,subscription,routine_start_minutes,timezone,coarse_latitude,coarse_longitude,preferred_language,last_sent_date,created_at,updated_at",
+      select: "id,subscription,routine_start_minutes,timezone,coarse_latitude,coarse_longitude,preferred_language,installation_id,last_sent_date,created_at,updated_at",
       order: "created_at.asc"
     })
   });
@@ -132,9 +133,10 @@ async function sendReadyChecklistPush(record, env) {
     publicKey: env.VAPID_PUBLIC_KEY,
     privateKey: env.VAPID_PRIVATE_KEY
   };
-  const reminder = await buildReminderPayload(record);
+  const { reminder, variant, weatherContext } = await buildReminderPayload(record);
+  const notificationEventId = await recordNotificationScheduled(record, variant, weatherContext, env);
   const message = {
-    data: reminder,
+    data: { ...reminder, notificationEventId },
     options: {
       ttl: 60 * 60,
       topic: "ready-checklist"
@@ -152,7 +154,7 @@ async function sendReadyChecklistPush(record, env) {
 
 async function buildReminderPayload(record) {
   if (!Number.isFinite(record.coarseLatitude) || !Number.isFinite(record.coarseLongitude)) {
-    return FALLBACK_REMINDER;
+    return { reminder: FALLBACK_REMINDER, variant: "generic", weatherContext: null };
   }
 
   try {
@@ -162,9 +164,49 @@ async function buildReminderPayload(record) {
       weatherSummary
     });
 
-    return { ...FALLBACK_REMINDER, title: copy.title, body: copy.body };
+    return {
+      reminder: { ...FALLBACK_REMINDER, title: copy.title, body: copy.body },
+      variant: copy.variant,
+      weatherContext: weatherSummary
+    };
   } catch (error) {
-    return FALLBACK_REMINDER;
+    return { reminder: FALLBACK_REMINDER, variant: "generic", weatherContext: null };
+  }
+}
+
+// Recorded immediately after buildReminderPayload, before the actual push
+// send — the closest proxy this Worker has for "delivered" without a
+// device-side delivery receipt. Never throws: returns null on any failure so
+// a storage hiccup never blocks sending the actual reminder.
+async function recordNotificationScheduled(record, variant, weatherContext, env) {
+  if (!record.installationId) {
+    return null;
+  }
+
+  try {
+    const now = new Date().toISOString();
+    const response = await supabaseFetch(env, {
+      path: notificationEventsTablePath(env),
+      init: {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Prefer: "return=representation" },
+        body: JSON.stringify({
+          installation_id: record.installationId,
+          notification_type: "scheduled_reminder",
+          message_variant: variant,
+          weather_context: weatherContext,
+          scheduled_at: now,
+          delivered_at: now
+        })
+      }
+    });
+    const rows = await response.json();
+    const saved = Array.isArray(rows) ? rows[0] : rows;
+
+    return saved?.id ?? null;
+  } catch (error) {
+    console.error("notification_events insert failed.", error);
+    return null;
   }
 }
 
@@ -280,6 +322,10 @@ function tablePath(env) {
   return encodeURIComponent(env.SUPABASE_PUSH_SUBSCRIPTIONS_TABLE || DEFAULT_TABLE_NAME);
 }
 
+function notificationEventsTablePath(env) {
+  return encodeURIComponent(env.SUPABASE_NOTIFICATION_EVENTS_TABLE || DEFAULT_NOTIFICATION_EVENTS_TABLE);
+}
+
 function toRecord(row) {
   return {
     id: row.id,
@@ -289,6 +335,7 @@ function toRecord(row) {
     coarseLatitude: row.coarse_latitude ?? null,
     coarseLongitude: row.coarse_longitude ?? null,
     preferredLanguage: row.preferred_language ?? null,
+    installationId: row.installation_id ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     lastSentDate: row.last_sent_date

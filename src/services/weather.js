@@ -1,4 +1,5 @@
 import { APP_CONFIG } from "../config.js";
+import { trackApiPerformance } from "./analytics.js";
 
 // A named error type keeps forecast failures separate from location or app
 // rendering errors.
@@ -52,12 +53,16 @@ export async function fetchTodayWeather({ latitude, longitude }) {
   }).toString();
 
   let response;
+  const startedAt = performance.now();
 
   try {
     response = await fetch(url);
   } catch (error) {
+    trackApiPerformance({ endpoint: "open-meteo:forecast", durationMs: performance.now() - startedAt, statusCode: null });
     throw new WeatherFetchError("Weather is unavailable right now.");
   }
+
+  trackApiPerformance({ endpoint: "open-meteo:forecast", durationMs: performance.now() - startedAt, statusCode: response.status });
 
   if (!response.ok) {
     throw new WeatherFetchError("Weather is unavailable right now.");

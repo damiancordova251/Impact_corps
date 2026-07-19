@@ -27,8 +27,22 @@ import {
   ALLOWED_EVENT_NAMES,
   isAnalyticsStoreConfigured,
   recordAnalyticsEvent,
-  recordFeedbackSubmission
+  recordApiPerformanceEvent,
+  recordClientError,
+  recordFeedbackSubmission,
+  recordRecommendationEvent
 } from "./analyticsService.js";
+import {
+  getOrCreateReferralCode,
+  isReferralStoreConfigured,
+  markReferralVisitConverted,
+  recordReferralVisit
+} from "./referralStore.js";
+import {
+  isNotificationEventStoreConfigured,
+  recordNotificationDismissed,
+  recordNotificationOpened
+} from "./notificationEventStore.js";
 import {
   isValidRoutineStartMinutes,
   isValidTimezone
@@ -259,6 +273,192 @@ app.post("/api/feedback", async (req, res) => {
   }
 });
 
+// Returns (creating on first call) the installation's own referral code, used
+// to build its share link.
+app.post("/api/referrals/code", async (req, res) => {
+  if (!isReferralStoreConfigured()) {
+    res.status(503).json({ error: "Referral storage is not configured." });
+    return;
+  }
+
+  const installationId = req.body?.installationId;
+
+  if (!isValidAnonymousDeviceId(installationId)) {
+    res.status(400).json({ error: "A valid installation id is required." });
+    return;
+  }
+
+  try {
+    const code = await getOrCreateReferralCode(installationId);
+    res.status(200).json({ code });
+  } catch (error) {
+    console.error("Referral code lookup failed.", error);
+    res.status(503).json({ error: "Referral code is not available right now." });
+  }
+});
+
+// Logs one visit to a referral link (fired once per landing with ?ref=...).
+app.post("/api/referrals/visits", async (req, res) => {
+  if (!isReferralStoreConfigured()) {
+    res.status(202).json({ ok: false });
+    return;
+  }
+
+  const referralCode = req.body?.referralCode;
+  const visitorInstallationId = req.body?.installationId;
+
+  if (!isValidReferralCode(referralCode)) {
+    res.status(400).json({ error: "A valid referral code is required." });
+    return;
+  }
+
+  if (visitorInstallationId !== undefined && !isValidAnonymousDeviceId(visitorInstallationId)) {
+    res.status(400).json({ error: "installationId must be a valid installation id, or omitted." });
+    return;
+  }
+
+  const shareChannel = typeof req.body?.shareChannel === "string" ? req.body.shareChannel.slice(0, 40) : null;
+
+  try {
+    const id = await recordReferralVisit({ referralCode, visitorInstallationId: visitorInstallationId ?? null, shareChannel });
+    res.status(201).json({ id });
+  } catch (error) {
+    console.error("Referral visit logging failed.", error);
+    res.status(202).json({ ok: false });
+  }
+});
+
+// Marks a previously-logged visit as having resulted in a completed
+// installation (called once, when this device finishes onboarding).
+app.post("/api/referrals/visits/:id/convert", async (req, res) => {
+  if (!isReferralStoreConfigured()) {
+    res.status(202).json({ ok: false });
+    return;
+  }
+
+  const visitId = req.params.id;
+  const installationId = req.body?.installationId;
+  const referralCode = req.body?.referralCode;
+
+  if (!isValidUuid(visitId)) {
+    res.status(400).json({ error: "A valid visit id is required." });
+    return;
+  }
+
+  if (!isValidAnonymousDeviceId(installationId) || !isValidReferralCode(referralCode)) {
+    res.status(400).json({ error: "A valid installationId and referralCode are required." });
+    return;
+  }
+
+  try {
+    await markReferralVisitConverted({ visitId, installationId, referralCode });
+    res.status(204).send();
+  } catch (error) {
+    console.error("Referral conversion failed.", error);
+    res.status(202).json({ ok: false });
+  }
+});
+
+// Called by the service worker on notification click/close. Best-effort and
+// idempotent: always responds 204 for a well-formed id, whether or not a
+// matching row exists, so this never becomes a way to probe row existence.
+app.post("/api/notifications/events/:id/opened", async (req, res) => {
+  await handleNotificationEventUpdate(req, res, recordNotificationOpened);
+});
+
+app.post("/api/notifications/events/:id/dismissed", async (req, res) => {
+  await handleNotificationEventUpdate(req, res, recordNotificationDismissed);
+});
+
+async function handleNotificationEventUpdate(req, res, updateFn) {
+  if (!isNotificationEventStoreConfigured()) {
+    res.status(202).json({ ok: false });
+    return;
+  }
+
+  if (!isValidUuid(req.params.id)) {
+    res.status(400).json({ error: "A valid notification event id is required." });
+    return;
+  }
+
+  await updateFn(req.params.id);
+  res.status(204).send();
+}
+
+// Global client-side error reports (window.onerror/unhandledrejection).
+// Soft-fails like the other analytics endpoints: error reporting must never
+// itself surface an error to the user.
+app.post("/api/client-errors", async (req, res) => {
+  if (!isAnalyticsStoreConfigured()) {
+    res.status(202).json({ ok: false });
+    return;
+  }
+
+  const parsed = parseClientErrorPayload(req.body);
+
+  if (!parsed.ok) {
+    res.status(400).json({ error: parsed.error });
+    return;
+  }
+
+  try {
+    await recordClientError(parsed.value);
+    res.status(204).send();
+  } catch (error) {
+    console.error("Client error logging failed.", error);
+    res.status(202).json({ ok: false });
+  }
+});
+
+// Lightweight API-latency samples (currently just the weather/recommendation
+// fetch). Soft-fails for the same reason as client-errors above.
+app.post("/api/performance-events", async (req, res) => {
+  if (!isAnalyticsStoreConfigured()) {
+    res.status(202).json({ ok: false });
+    return;
+  }
+
+  const parsed = parsePerformanceEventPayload(req.body);
+
+  if (!parsed.ok) {
+    res.status(400).json({ error: parsed.error });
+    return;
+  }
+
+  try {
+    await recordApiPerformanceEvent(parsed.value);
+    res.status(204).send();
+  } catch (error) {
+    console.error("Performance event logging failed.", error);
+    res.status(202).json({ ok: false });
+  }
+});
+
+// The rich, typed counterpart to the flat "recommendation_generated"
+// analytics event. Soft-fails for the same reason as the other analytics
+// endpoints.
+app.post("/api/recommendation-events", async (req, res) => {
+  if (!isAnalyticsStoreConfigured()) {
+    res.status(202).json({ ok: false });
+    return;
+  }
+
+  const parsed = parseRecommendationEventPayload(req.body);
+
+  if (!parsed.ok) {
+    res.status(400).json({ error: parsed.error });
+    return;
+  }
+
+  try {
+    await recordRecommendationEvent(parsed.value);
+    res.status(204).send();
+  } catch (error) {
+    console.error("Recommendation event logging failed.", error);
+    res.status(202).json({ ok: false });
+  }
+});
+
 servePwaFiles(app);
 
 // Starts the web server first, then starts scheduled reminders only when VAPID
@@ -347,6 +547,8 @@ function parseSubscriptionPayload(body) {
     };
   }
 
+  const installationId = body?.installationId;
+
   return {
     ok: true,
     value: {
@@ -355,7 +557,8 @@ function parseSubscriptionPayload(body) {
       timezone,
       coarseLatitude: coarseLocation?.coarseLatitude ?? null,
       coarseLongitude: coarseLocation?.coarseLongitude ?? null,
-      preferredLanguage: isValidLanguage(body?.preferredLanguage) ? body.preferredLanguage : null
+      preferredLanguage: isValidLanguage(body?.preferredLanguage) ? body.preferredLanguage : null,
+      installationId: isValidAnonymousDeviceId(installationId) ? installationId : null
     }
   };
 }
@@ -452,6 +655,119 @@ function parseFeedbackPayload(body) {
   };
 }
 
+// installationId is optional here (unlike feedback/analytics-events): an
+// error occurring before an anonymous id is even readable is still worth
+// recording.
+function parseClientErrorPayload(body) {
+  const errorType = body?.errorType;
+
+  if (typeof errorType !== "string" || errorType.length === 0 || errorType.length > 60) {
+    return {
+      ok: false,
+      error: "A valid errorType is required."
+    };
+  }
+
+  const installationId = body?.installationId;
+
+  return {
+    ok: true,
+    value: {
+      installationId: isValidAnonymousDeviceId(installationId) ? installationId : null,
+      errorType,
+      message: typeof body?.message === "string" ? body.message.slice(0, 500) : null,
+      stackExcerpt: typeof body?.stackExcerpt === "string" ? body.stackExcerpt.slice(0, 1000) : null,
+      appVersion: typeof body?.appVersion === "string" ? body.appVersion.slice(0, 20) : null,
+      platform: typeof body?.platform === "string" ? body.platform.slice(0, 200) : null,
+      occurredAt: isValidIsoDate(body?.occurredAt) ? body.occurredAt : new Date().toISOString()
+    }
+  };
+}
+
+function parsePerformanceEventPayload(body) {
+  const endpoint = body?.endpoint;
+
+  if (typeof endpoint !== "string" || endpoint.length === 0 || endpoint.length > 80) {
+    return {
+      ok: false,
+      error: "A valid endpoint is required."
+    };
+  }
+
+  const installationId = body?.installationId;
+  const durationMs = Number(body?.durationMs);
+  const statusCode = Number(body?.statusCode);
+
+  return {
+    ok: true,
+    value: {
+      installationId: isValidAnonymousDeviceId(installationId) ? installationId : null,
+      endpoint,
+      durationMs: Number.isFinite(durationMs) && durationMs >= 0 ? Math.round(durationMs) : null,
+      statusCode: Number.isInteger(statusCode) && statusCode >= 100 && statusCode <= 599 ? statusCode : null,
+      occurredAt: isValidIsoDate(body?.occurredAt) ? body.occurredAt : new Date().toISOString()
+    }
+  };
+}
+
+function parseRecommendationEventPayload(body) {
+  const installationId = body?.installationId;
+
+  if (!isValidAnonymousDeviceId(installationId)) {
+    return {
+      ok: false,
+      error: "A valid installation id is required."
+    };
+  }
+
+  const expectedTimeAwayHours = Number(body?.expectedTimeAwayHours);
+  const generationTimeMs = Number(body?.generationTimeMs);
+
+  return {
+    ok: true,
+    value: {
+      installationId,
+      weatherConditions: sanitizeWeatherConditions(body?.weatherConditions),
+      expectedTimeAwayHours: Number.isFinite(expectedTimeAwayHours) ? expectedTimeAwayHours : null,
+      items: sanitizeRecommendationItems(body?.items),
+      personalized: Boolean(body?.personalized),
+      generationTimeMs: Number.isFinite(generationTimeMs) && generationTimeMs >= 0 ? Math.round(generationTimeMs) : null,
+      occurredAt: isValidIsoDate(body?.occurredAt) ? body.occurredAt : new Date().toISOString()
+    }
+  };
+}
+
+// Only finite numbers pass through; never exact coordinates (there is no
+// latitude/longitude field to begin with — just temps/precip/wind/condition).
+function sanitizeWeatherConditions(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return {};
+  }
+
+  const clean = {};
+
+  Object.entries(value).forEach(([key, fieldValue]) => {
+    if (typeof key !== "string" || key.length > 40) {
+      return;
+    }
+
+    const number = Number(fieldValue);
+    clean[key] = Number.isFinite(number) ? number : null;
+  });
+
+  return clean;
+}
+
+// Bounded to a small array of plain descriptor objects — the same structured
+// shape domain/recommendation.js already produces, never free-form text.
+function sanitizeRecommendationItems(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return value.slice(0, 30).map((item) => (item && typeof item === "object" && !Array.isArray(item) ? item : null)).filter(Boolean);
+}
+
 function isValidIsoDate(value) {
   return typeof value === "string" && !Number.isNaN(Date.parse(value));
 }
@@ -530,6 +846,15 @@ function isValidAnonymousDeviceId(value) {
     && value.length >= 8
     && value.length <= 80
     && /^[a-zA-Z0-9_-]+$/.test(value);
+}
+
+function isValidReferralCode(value) {
+  return typeof value === "string" && /^[A-Z0-9]{4,16}$/.test(value);
+}
+
+function isValidUuid(value) {
+  return typeof value === "string"
+    && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
 }
 
 function sanitizePilotEventMetadata(metadata) {

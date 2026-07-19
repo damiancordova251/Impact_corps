@@ -1,6 +1,6 @@
 // Bump APP_VERSION whenever cached app shell or icon assets need to be refreshed
 // for installed PWAs.
-const APP_VERSION = "analytics-forecast-tracker";
+const APP_VERSION = "referral-notification-lifecycle";
 const CACHE_NAME = `ready-${APP_VERSION}`;
 
 // Core assets use network-first caching so pilot deployments are less likely to
@@ -18,11 +18,13 @@ const CORE_ASSETS = [
   "./src/dom/elements.js",
   "./src/utils/format.js",
   "./src/utils/browser.js",
+  "./src/utils/errorReporting.js",
   "./src/services/weather.js",
   "./src/services/location.js",
   "./src/services/notificationsApi.js",
   "./src/services/pilotAnalytics.js",
   "./src/services/analytics.js",
+  "./src/services/referralApi.js",
   "./src/domain/recommendation.js",
   "./src/domain/personalizedChecklist.js",
   "./src/domain/clothingPreferences.js",
@@ -121,18 +123,30 @@ self.addEventListener("push", (event) => {
       icon: "./icons/app-icon-192.png",
       badge: "./icons/app-icon-192.png",
       data: {
-        url: reminder.url ?? "./"
+        url: reminder.url ?? "./",
+        notificationEventId: reminder.notificationEventId ?? null
       }
     })
   );
 });
 
 // Notification clicks focus an existing app window when possible, otherwise they
-// open a new app window and mark the launch as notification-driven.
+// open a new app window and mark the launch as notification-driven. Also
+// reports back to notification_events (best-effort; a fetch failure here
+// never blocks focusing/opening the app).
 self.addEventListener("notificationclick", (event) => {
   event.notification.close();
 
-  event.waitUntil(openOrFocusAppFromNotification(event.notification.data?.url));
+  event.waitUntil(Promise.all([
+    openOrFocusAppFromNotification(event.notification.data?.url),
+    reportNotificationEvent(event.notification.data?.notificationEventId, "opened")
+  ]));
+});
+
+// Fires only when a notification is explicitly dismissed/swiped away (not on
+// click), and isn't supported in every browser — best-effort signal only.
+self.addEventListener("notificationclose", (event) => {
+  event.waitUntil(reportNotificationEvent(event.notification.data?.notificationEventId, "dismissed"));
 });
 
 // Network-first caching gives fresh deployments priority while preserving a
@@ -183,6 +197,24 @@ async function cacheFirst(request) {
 }
 
 // Parses backend push data and falls back to default reminder copy.
+// Best-effort only: swallows every failure so a missing id, offline device,
+// or backend hiccup never affects notification click/close behavior.
+async function reportNotificationEvent(notificationEventId, outcome) {
+  if (!notificationEventId) {
+    return;
+  }
+
+  try {
+    await fetch(`/api/notifications/events/${notificationEventId}/${outcome}`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "{}"
+    });
+  } catch (error) {
+    // Ignored — see comment above.
+  }
+}
+
 function getPushReminder(event) {
   if (!event.data) {
     return getDefaultReminder();

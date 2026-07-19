@@ -35,6 +35,10 @@ keep working exactly as before.
   scheduled notifications mention weather context in the user's chosen language. Null for every
   subscription that existed before this migration; the scheduler falls back to the existing
   generic message when either is missing.
+- **`push_subscriptions.installation_id`** — new, nullable column linking a subscription back to
+  the same anonymous installation id used elsewhere, so a sent reminder can be recorded as a
+  `notification_events` row (which requires an installation id). Existing subscriptions stay null
+  until the next time that browser resubscribes.
 
 ## Applying the migrations
 
@@ -44,11 +48,11 @@ token) — same situation as the original `push_subscriptions`/`pilot_events` se
 yourself:
 
 1. Open the Supabase dashboard → SQL Editor for this project.
-2. Run each file in `supabase/migrations/` **in numeric order** (`0001_...` through `0007_...`).
+2. Run each file in `supabase/migrations/` **in numeric order** (`0001_...` through `0008_...`).
    Every statement uses `create table if not exists` / `add column if not exists`, so re-running a
    file that already applied is a safe no-op.
 3. Confirm the new tables appear under Table Editor, and that `push_subscriptions` now shows the
-   three new nullable columns with existing rows unaffected.
+   four new nullable columns with existing rows unaffected.
 4. No new environment variables are required for the analytics/feedback endpoints — they reuse the
    existing `SUPABASE_URL`/`SUPABASE_SERVICE_ROLE_KEY` already configured for
    `push_subscriptions`/`pilot_events`.

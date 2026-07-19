@@ -7,6 +7,9 @@ import { createClient } from "@supabase/supabase-js";
 const ANALYTICS_EVENTS_TABLE_DEFAULT = "analytics_events";
 const APP_INSTALLATIONS_TABLE_DEFAULT = "app_installations";
 const FEEDBACK_SUBMISSIONS_TABLE_DEFAULT = "feedback_submissions";
+const CLIENT_ERRORS_TABLE_DEFAULT = "client_errors";
+const API_PERFORMANCE_EVENTS_TABLE_DEFAULT = "api_performance_events";
+const RECOMMENDATION_EVENTS_TABLE_DEFAULT = "recommendation_events";
 
 // Kept in sync with src/services/analytics.js's own allowlist on the client;
 // this is the actual source of truth since the client's copy is only a
@@ -100,6 +103,77 @@ export async function recordFeedbackSubmission({
       language: language ?? null,
       from_scheduled_prompt: Boolean(fromScheduledPrompt),
       allow_follow_up: Boolean(allowFollowUp)
+    });
+
+  if (error) {
+    throw new AnalyticsStoreError(error.message);
+  }
+}
+
+// Structured client-side error records, separate from the general
+// analytics_events stream so they get typed columns (stack excerpt, platform)
+// instead of a metadata blob. installationId is optional — an error can be
+// worth recording even before an installation row is guaranteed to exist.
+export async function recordClientError({ installationId, errorType, message, stackExcerpt, appVersion, platform, occurredAt }) {
+  const { error } = await getClient()
+    .from(getTableName(CLIENT_ERRORS_TABLE_DEFAULT, "SUPABASE_CLIENT_ERRORS_TABLE"))
+    .insert({
+      installation_id: installationId ?? null,
+      error_type: errorType,
+      message: message ?? null,
+      stack_excerpt: stackExcerpt ?? null,
+      app_version: appVersion ?? null,
+      platform: platform ?? null,
+      occurred_at: occurredAt ?? new Date().toISOString()
+    });
+
+  if (error) {
+    throw new AnalyticsStoreError(error.message);
+  }
+}
+
+export async function recordApiPerformanceEvent({ installationId, endpoint, durationMs, statusCode, occurredAt }) {
+  const { error } = await getClient()
+    .from(getTableName(API_PERFORMANCE_EVENTS_TABLE_DEFAULT, "SUPABASE_API_PERFORMANCE_EVENTS_TABLE"))
+    .insert({
+      installation_id: installationId ?? null,
+      endpoint,
+      duration_ms: durationMs ?? null,
+      status_code: statusCode ?? null,
+      occurred_at: occurredAt ?? new Date().toISOString()
+    });
+
+  if (error) {
+    throw new AnalyticsStoreError(error.message);
+  }
+}
+
+// The rich counterpart to the flat "recommendation_generated" analytics_events
+// row: typed weather-conditions/items/generation-timing columns, so
+// recommendation usefulness can eventually be measured. Upserts
+// app_installations first since recommendation_events.installation_id has a
+// not-null FK to it (mirrors recordAnalyticsEvent's own upsert-then-insert).
+export async function recordRecommendationEvent({ installationId, weatherConditions, expectedTimeAwayHours, items, personalized, generationTimeMs, occurredAt }) {
+  const client = getClient();
+
+  const { error: upsertError } = await client
+    .from(getTableName(APP_INSTALLATIONS_TABLE_DEFAULT, "SUPABASE_APP_INSTALLATIONS_TABLE"))
+    .upsert({ id: installationId, last_active_at: new Date().toISOString() }, { onConflict: "id" });
+
+  if (upsertError) {
+    throw new AnalyticsStoreError(upsertError.message);
+  }
+
+  const { error } = await client
+    .from(getTableName(RECOMMENDATION_EVENTS_TABLE_DEFAULT, "SUPABASE_RECOMMENDATION_EVENTS_TABLE"))
+    .insert({
+      installation_id: installationId,
+      occurred_at: occurredAt ?? new Date().toISOString(),
+      expected_time_away_hours: expectedTimeAwayHours ?? null,
+      weather_conditions: weatherConditions ?? {},
+      items: items ?? [],
+      personalized: Boolean(personalized),
+      generation_time_ms: generationTimeMs ?? null
     });
 
   if (error) {

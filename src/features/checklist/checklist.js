@@ -4,7 +4,7 @@ import { SAVED_LOCATION_STORAGE_KEY } from "../../constants/storageKeys.js";
 import { getCurrentLocation, LocationAccessError } from "../../services/location.js";
 import { fetchTodayWeather, WeatherFetchError } from "../../services/weather.js";
 import { trackPilotEvent } from "../../services/pilotAnalytics.js";
-import { trackEvent } from "../../services/analytics.js";
+import { recordRecommendationEvent, trackEvent } from "../../services/analytics.js";
 import { t } from "../../i18n/i18n.js";
 import { translateDomainString } from "../../i18n/domainStrings.js";
 import {
@@ -104,10 +104,12 @@ export async function initializeSavedLocationChecklist() {
 // checklist the same way the main app does.
 export function renderWindowRecommendation(weather, requestedAt = new Date(), options = {}) {
   const timeAwayHours = getSavedTimeAwayHours();
+  const generationStartedAt = performance.now();
   const forecastWindow = getNextForecastWindow(weather, requestedAt, timeAwayHours);
   const windowWeather = buildWindowWeather(weather, forecastWindow);
   const recommendation = createRecommendation(windowWeather);
   const groupedChecklist = getSavedGroupedChecklist(recommendation);
+  const generationTimeMs = performance.now() - generationStartedAt;
   const renderedChecklist = groupedChecklist ?? recommendation.items;
 
   state.latestWeather = weather;
@@ -127,6 +129,26 @@ export function renderWindowRecommendation(weather, requestedAt = new Date(), op
     expectedTimeAwayHours: timeAwayHours,
     personalized: Boolean(groupedChecklist?.personalized)
   });
+  recordRecommendationEvent({
+    weatherConditions: summarizeWeatherConditions(windowWeather),
+    expectedTimeAwayHours: timeAwayHours,
+    items: recommendation.items,
+    personalized: Boolean(groupedChecklist?.personalized),
+    generationTimeMs
+  });
+}
+
+// Bounded, typed summary for recommendation_events.weather_conditions — never
+// exact coordinates, just the same conditions the checklist was based on.
+function summarizeWeatherConditions(weather) {
+  return {
+    temperature: weather.current?.temperature ?? null,
+    feelsLike: weather.current?.feelsLike ?? null,
+    precipitation: weather.current?.precipitation ?? null,
+    precipitationProbability: weather.daily?.precipitationProbability ?? null,
+    weatherCode: weather.current?.weatherCode ?? null,
+    windSpeed: weather.current?.windSpeed ?? null
+  };
 }
 
 // Updates the main checklist screen after a successful weather fetch.

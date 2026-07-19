@@ -1,8 +1,68 @@
 # Ready PWA Postmortem and Handoff
 
-Last updated: July 17, 2026
+Last updated: July 19, 2026
 
 This document summarizes what has been built so far for the Impact Corps / Ready PWA project. It is intended as a self-contained handoff for future development work.
+
+## Recent Update (Supabase Analytics Schema, Notification-Content Wiring, Forecast-Accuracy Pipeline, Referral Tracking, Full Event Instrumentation)
+
+- Expanded Supabase schema across 8 migrations (`supabase/migrations/0001`–`0008`): `app_installations`,
+  `analytics_events`, `recommendation_events`, `notification_events`, `referrals`, `referral_visits`,
+  `feedback_submissions`, `client_errors`, `api_performance_events`, `forecast_predictions`,
+  `forecast_actuals`, `model_change_proposals`, plus `coarse_latitude`/`coarse_longitude`/
+  `preferred_language`/`installation_id` columns added to the existing `push_subscriptions`. All
+  additive (`create table if not exists`/`add column if not exists`), RLS enabled with no
+  `anon`/`authenticated` policies — same backend-service-role-key-only access pattern as
+  `push_subscriptions`/`pilot_events`. See `supabase/README.md` and `supabase/ANALYTICS_QUERIES.md`.
+- `POST /api/analytics/events` and `POST /api/feedback` (Express + Cloudflare Pages Functions) are
+  now real — `src/services/analytics.js`'s `trackEvent()` and the feedback prompt actually persist,
+  no longer 404ing.
+- **Notification content wiring completed**: coarse location (rounded to 1 decimal degree
+  client-side, in `services/notificationsApi.js`) and preferred language are captured on subscribe.
+  Both `workers/reminder-scheduler` and `server/pushService.js` fetch a small Open-Meteo summary at
+  send time and pick a bilingual, weather-aware message variant via `server/notificationCopy.js`
+  (duplicated into the Worker runtime), falling back to the existing generic message on missing
+  location or any failure.
+- **New `workers/forecast-tracker` Cloudflare Worker** (own `wrangler.toml`/`package.json`,
+  `DRY_RUN=true` default): every 30 minutes, snapshots Open-Meteo predictions (6h/12h/24h horizons)
+  for the distinct coarse locations currently present in `push_subscriptions` into
+  `forecast_predictions`, and records observed conditions for predictions whose `target_time` has
+  passed into `forecast_actuals` with computed error columns. This is accuracy-monitoring only —
+  nothing here ever changes `domain/recommendation.js`; any proposed threshold change belongs in a
+  manually-reviewed `model_change_proposals` row.
+- **Referral tracking is now real**, not just a generic share link: `src/services/referralApi.js`
+  fetches/generates a per-installation referral code (`POST /api/referrals/code`),
+  `shareFab.js` embeds it in the share link as `?ref=CODE`, landing on that link logs a visit
+  (`POST /api/referrals/visits`), and completing onboarding marks that visit converted and tags the
+  new installation with the referring code (`POST /api/referrals/visits/:id/convert`).
+- **`notification_events` now records the full delivery lifecycle**: scheduled/delivered are
+  recorded at send time (both `server/pushService.js` and `workers/reminder-scheduler` call this
+  before the actual push send), and opened/dismissed are reported back by `sw.js`'s
+  `notificationclick`/`notificationclose` handlers (`POST /api/notifications/events/:id/opened`
+  `|dismissed`). Requires the new `push_subscriptions.installation_id` column (migration 0008) to
+  link a subscription back to its anonymous installation id.
+- A global client-side error handler (`src/utils/errorReporting.js`, initialized first thing in
+  `app.js`) catches `window.onerror`/`unhandledrejection` and posts to the dedicated `client_errors`
+  table, capped at 20 reports per session.
+- `api_performance_events` gets one real call site: the weather/recommendation Open-Meteo fetch in
+  `src/services/weather.js` is timed and reported.
+- The rich, typed `recommendation_events` table (weather conditions, items, personalized flag,
+  generation time) is now populated alongside the existing flat `recommendation_generated` analytics
+  event, at the same `renderWindowRecommendation()` call site.
+- The feedback prompt also gained an optional "what other clothing options would you like to see?"
+  question (`feedback_submissions.clothing_suggestions`).
+- All of the above was verified live against the real Supabase project (all 8 migrations applied via
+  the SQL Editor) with real requests to every new endpoint, a real (temporarily-non-dry-run, then
+  reverted) `forecast-tracker` run against real Open-Meteo data, and full cleanup of every
+  test-created row afterward; the real pilot `push_subscriptions` rows were confirmed untouched
+  throughout.
+- **Still requires a manual deploy step before any of this is live**: this environment has no
+  Cloudflare login (`wrangler whoami` fails), so neither `workers/reminder-scheduler` (updated with
+  the weather-aware copy and `notification_events` recording) nor the brand-new
+  `workers/forecast-tracker` has been deployed. Until `wrangler deploy` is run for both, reminders
+  keep sending the old generic text and no forecast-accuracy data is collected. Cloudflare Pages (the
+  static site and `functions/`) auto-deploys from `main`, so everything else in this list is already
+  live.
 
 ## Recent Update (Modularization, Referral Share, Notification Toggle, Icon Polish)
 

@@ -1,6 +1,7 @@
 // Main browser entry point. Each feature module owns its own DOM wiring; this
 // file only initializes them in the right order and wires the few explicit
 // cross-feature callbacks that would otherwise create circular imports.
+import { initErrorReporting } from "./utils/errorReporting.js";
 import { state } from "./state/appState.js";
 import { trackPilotEvent } from "./services/pilotAnalytics.js";
 import { trackEvent } from "./services/analytics.js";
@@ -28,7 +29,9 @@ import { initWeatherScreen } from "./features/weatherScreen/weatherScreen.js";
 import { initPwaClient } from "./features/pwa/serviceWorkerClient.js";
 import { initOnboarding } from "./features/onboarding/onboarding.js";
 import { initShareFab } from "./features/share/shareFab.js";
+import { recordReferralVisitIfNeeded } from "./services/referralApi.js";
 
+initErrorReporting();
 applyStaticTranslations();
 
 initChecklist();
@@ -60,5 +63,6 @@ initFeedbackPrompt();
 
 trackPilotEvent("app_opened", { standalone: isStandalonePwa() });
 trackEvent("session_started", { standalone: isStandalonePwa() });
+recordReferralVisitIfNeeded();
 
 initOnboarding();

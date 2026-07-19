@@ -1,5 +1,5 @@
 import { APP_CONFIG } from "../config.js";
-import { PUSH_SUBSCRIPTION_ID_STORAGE_KEY } from "../constants/storageKeys.js";
+import { INSTALLATION_ID_STORAGE_KEY, PUSH_SUBSCRIPTION_ID_STORAGE_KEY } from "../constants/storageKeys.js";
 import { isStandalonePwa } from "../utils/browser.js";
 
 const APP_ICON_URL = "./icons/app-icon-192.png";
@@ -83,15 +83,28 @@ export async function subscribeToPushReminders({ routineStartMinutes, timezone, 
   const vapidPublicKey = await fetchVapidPublicKey();
   const subscription = await getOrCreatePushSubscription(registration, vapidPublicKey);
   const coarseLocation = roundToCoarseLocation(location);
+  const installationId = getInstallationId();
   const response = await postJson("/api/push/subscriptions", {
     subscription: subscription.toJSON(),
     routineStartMinutes,
     timezone,
     ...(coarseLocation ?? {}),
-    ...(preferredLanguage ? { preferredLanguage } : {})
+    ...(preferredLanguage ? { preferredLanguage } : {}),
+    ...(installationId ? { installationId } : {})
   });
 
   return response.subscription;
+}
+
+// Links the subscription back to the same anonymous id used elsewhere in
+// analytics, so a sent reminder can be recorded as a notification_events row.
+// Omitted (never blocking subscribe) if unavailable for any reason.
+function getInstallationId() {
+  try {
+    return window.localStorage.getItem(INSTALLATION_ID_STORAGE_KEY);
+  } catch (error) {
+    return null;
+  }
 }
 
 function roundToCoarseLocation(location) {

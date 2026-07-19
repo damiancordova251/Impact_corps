@@ -74,6 +74,61 @@ export function trackEvent(eventName, metadata = {}) {
   }).catch(() => {});
 }
 
+// A small, separate latency sample — not part of the general event stream,
+// since api_performance_events has typed duration/status columns rather than
+// a metadata blob. Best-effort and silent, same as trackEvent().
+export function trackApiPerformance({ endpoint, durationMs, statusCode }) {
+  const installationId = getInstallationId();
+
+  if (!installationId) {
+    return;
+  }
+
+  const payload = JSON.stringify({
+    installationId,
+    endpoint,
+    durationMs,
+    statusCode,
+    occurredAt: new Date().toISOString()
+  });
+
+  fetch(apiUrl("/api/performance-events"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: payload,
+    keepalive: true
+  }).catch(() => {});
+}
+
+// The rich, typed counterpart to trackEvent("recommendation_generated", ...):
+// what weather conditions produced which checklist, so recommendation
+// usefulness can eventually be measured. weatherConditions is a small
+// summary (temps/precip/wind/condition code) — never exact coordinates.
+export function recordRecommendationEvent({ weatherConditions, expectedTimeAwayHours, items, personalized, generationTimeMs }) {
+  const installationId = getInstallationId();
+
+  if (!installationId) {
+    return;
+  }
+
+  const payload = JSON.stringify({
+    installationId,
+    weatherConditions: weatherConditions ?? {},
+    expectedTimeAwayHours: expectedTimeAwayHours ?? null,
+    items: Array.isArray(items) ? items : [],
+    personalized: Boolean(personalized),
+    generationTimeMs: generationTimeMs ?? null,
+    occurredAt: new Date().toISOString()
+  });
+
+  fetch(apiUrl("/api/recommendation-events"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: payload,
+    keepalive: true
+  }).catch(() => {});
+}
+
 // Reuses the same anonymous device id pilotAnalytics.js already generates, so
 // the two event tables can be joined by the same installation identity
 // without introducing a second id.

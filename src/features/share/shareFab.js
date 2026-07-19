@@ -1,6 +1,7 @@
 import { APP_CONFIG } from "../../config.js";
 import { t } from "../../i18n/i18n.js";
 import { trackEvent } from "../../services/analytics.js";
+import { getOrFetchReferralCode } from "../../services/referralApi.js";
 
 // A small referral/share feature: a floating action button that opens a
 // confirmation modal, then hands off to the device's native share sheet
@@ -62,10 +63,21 @@ function createShareModal() {
   return overlay;
 }
 
+let cachedReferralCode = null;
+
 function openShareModal(modal) {
   modal.querySelector(".share-modal-message").textContent = "";
   modal.hidden = false;
   trackEvent("share_opened", {});
+
+  // Fetched here (not blocking the modal opening) so it's usually ready by
+  // the time the user taps confirm; buildShareMessage() falls back to a
+  // plain link if it isn't.
+  if (!cachedReferralCode) {
+    getOrFetchReferralCode().then((code) => {
+      cachedReferralCode = code;
+    });
+  }
 }
 
 function closeShareModal(modal) {
@@ -124,10 +136,17 @@ async function copyShareTextToClipboard(text) {
 // The app link is always the current origin rather than a hardcoded domain:
 // Render and Cloudflare Pages deployments are different origins, and the only
 // correct "app link" is wherever the person sharing is actually running it.
+// The referral code (when available) is appended as ?ref=CODE so an install
+// resulting from this share can be attributed back to it; on any failure to
+// fetch a code, this just shares the plain link instead.
 function buildShareMessage() {
+  const link = cachedReferralCode
+    ? `${window.location.origin}/?ref=${cachedReferralCode}`
+    : window.location.origin;
+
   return t("share.message", {
     appName: APP_CONFIG.appName,
-    link: window.location.origin
+    link
   });
 }
 

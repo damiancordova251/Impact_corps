@@ -1,6 +1,7 @@
 import webPush from "web-push";
 import { createChecklistReminder } from "../src/domain/reminders.js";
 import { buildNotificationCopy } from "./notificationCopy.js";
+import { recordNotificationScheduled } from "./notificationEventStore.js";
 
 const OPEN_METEO_URL = "https://api.open-meteo.com/v1/forecast";
 
@@ -32,8 +33,14 @@ export function configureWebPush() {
 // message becomes weather-aware via notificationCopy.js; otherwise, and on
 // any weather-fetch failure, it falls back to the existing generic copy.
 export async function sendReadyChecklistPush(record) {
-  const reminder = await buildReminderPayload(record);
-  const payload = JSON.stringify(reminder);
+  const { reminder, variant, weatherContext } = await buildReminderPayload(record);
+  const notificationEventId = await recordNotificationScheduled({
+    installationId: record.installationId,
+    notificationType: "scheduled_reminder",
+    messageVariant: variant,
+    weatherContext
+  });
+  const payload = JSON.stringify({ ...reminder, notificationEventId });
 
   return webPush.sendNotification(record.subscription, payload);
 }
@@ -42,7 +49,7 @@ async function buildReminderPayload(record) {
   const fallback = createChecklistReminder({ url: "/" });
 
   if (!Number.isFinite(record.coarseLatitude) || !Number.isFinite(record.coarseLongitude)) {
-    return fallback;
+    return { reminder: fallback, variant: "generic", weatherContext: null };
   }
 
   try {
@@ -52,9 +59,13 @@ async function buildReminderPayload(record) {
       weatherSummary
     });
 
-    return { ...fallback, title: copy.title, body: copy.body };
+    return {
+      reminder: { ...fallback, title: copy.title, body: copy.body },
+      variant: copy.variant,
+      weatherContext: weatherSummary
+    };
   } catch (error) {
-    return fallback;
+    return { reminder: fallback, variant: "generic", weatherContext: null };
   }
 }
 

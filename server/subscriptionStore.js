@@ -4,6 +4,7 @@ import { createClient } from "@supabase/supabase-js";
 // Supabase-backed subscription storage replaces the old in-memory store so push
 // reminders survive server restarts.
 const DEFAULT_TABLE_NAME = "push_subscriptions";
+const DEFAULT_APP_INSTALLATIONS_TABLE = "app_installations";
 
 let supabaseClient = null;
 
@@ -22,6 +23,13 @@ export async function upsertSubscription(input) {
   const now = new Date().toISOString();
   const scheduleChanged = hasScheduleChanged(existing, input);
 
+  if (input.installationId) {
+    // Satisfies push_subscriptions.installation_id's FK to app_installations:
+    // the row must already exist before it can be referenced. Idempotent, so
+    // safe to run on every subscribe/resubscribe.
+    await upsertInstallation(input.installationId);
+  }
+
   const row = {
     id,
     subscription,
@@ -30,6 +38,7 @@ export async function upsertSubscription(input) {
     coarse_latitude: input.coarseLatitude ?? null,
     coarse_longitude: input.coarseLongitude ?? null,
     preferred_language: input.preferredLanguage ?? null,
+    installation_id: input.installationId ?? null,
     last_sent_date: scheduleChanged ? null : (existing?.lastSentDate ?? null),
     updated_at: now
   };
@@ -43,6 +52,14 @@ export async function upsertSubscription(input) {
   assertNoStoreError(error);
 
   return toRecord(data);
+}
+
+async function upsertInstallation(installationId) {
+  const { error } = await getClient()
+    .from(getAppInstallationsTableName())
+    .upsert({ id: installationId, last_active_at: new Date().toISOString() }, { onConflict: "id" });
+
+  assertNoStoreError(error);
 }
 
 // Read helpers expose one subscription or the full pilot list to API routes and
@@ -141,6 +158,10 @@ function getTableName() {
   return process.env.SUPABASE_PUSH_SUBSCRIPTIONS_TABLE || DEFAULT_TABLE_NAME;
 }
 
+function getAppInstallationsTableName() {
+  return process.env.SUPABASE_APP_INSTALLATIONS_TABLE || DEFAULT_APP_INSTALLATIONS_TABLE;
+}
+
 function createSubscriptionId(endpoint) {
   return crypto
     .createHash("sha256")
@@ -166,6 +187,7 @@ function toRecord(row) {
     coarseLatitude: row.coarse_latitude ?? null,
     coarseLongitude: row.coarse_longitude ?? null,
     preferredLanguage: row.preferred_language ?? null,
+    installationId: row.installation_id ?? null,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     lastSentDate: row.last_sent_date
