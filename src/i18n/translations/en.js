@@ -28,7 +28,10 @@ export const en = {
     sendTest: "Send test",
     languageLabel: "Language",
     languageEnglish: "English",
-    languageSpanish: "Español"
+    languageSpanish: "Español",
+    reportIssueTitle: "Report a problem",
+    reportIssueBody: "Something not working right? Let us know and we'll look into it.",
+    reportIssueButton: "Report a problem"
   },
   checklist: {
     todayKicker: "Today",
@@ -259,5 +262,17 @@ export const en = {
     dismiss: "Not now",
     thanks: "Thanks for the feedback!",
     submitFailed: "Feedback could not be sent. Please try again later."
+  },
+  reportIssue: {
+    kicker: "Report a problem",
+    title: "What went wrong?",
+    body: "Describe what happened — a bug, something confusing, anything. This goes straight to the team.",
+    messageLabel: "What happened?",
+    messagePlaceholder: "Describe the problem...",
+    submit: "Send",
+    cancel: "Cancel",
+    thanks: "Thanks — we'll take a look!",
+    submitFailed: "Couldn't send that right now. Please try again later.",
+    emptyMessage: "Please describe the problem before sending."
   }
 };

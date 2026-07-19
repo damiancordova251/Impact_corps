@@ -9,6 +9,7 @@ import { isStandalonePwa } from "./utils/browser.js";
 import { applyStaticTranslations } from "./i18n/i18n.js";
 import { initLanguageSetting } from "./features/settings/language.js";
 import { initFeedbackPrompt } from "./features/feedback/feedbackPrompt.js";
+import { initReportIssue } from "./features/feedback/reportIssue.js";
 import { renderWindowRecommendation } from "./features/checklist/checklist.js";
 import {
   initializeTimeAwaySetting,
@@ -60,6 +61,7 @@ initPwaClient();
 initShareFab();
 initLanguageSetting();
 initFeedbackPrompt();
+initReportIssue();
 
 trackPilotEvent("app_opened", { standalone: isStandalonePwa() });
 trackEvent("session_started", { standalone: isStandalonePwa() });

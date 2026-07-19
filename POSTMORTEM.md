@@ -4,6 +4,20 @@ Last updated: July 19, 2026
 
 This document summarizes what has been built so far for the Impact Corps / Ready PWA project. It is intended as a self-contained handoff for future development work.
 
+## Recent Update (Always-Available "Report a Problem" in Settings)
+
+- Added a new Settings entry, `src/features/feedback/reportIssue.js`, distinct from the existing
+  3-day-gated satisfaction prompt (`feedbackPrompt.js`): a "Report a problem" button is always
+  visible in Settings, with no cooldown, so pilot testers can flag day-one bugs immediately instead
+  of waiting three days for the scheduled prompt to appear.
+- Reuses the existing `POST /api/feedback` endpoint and `feedback_submissions` table with no backend
+  or schema changes — submissions are tagged `category: "issue_report"` and
+  `from_scheduled_prompt: false` so they're easy to tell apart from the periodic prompt's rows in
+  analytics queries.
+- Verified with a real headless-browser pass (Puppeteer): button visible in Settings, modal opens,
+  submission returns 204 and lands in `feedback_submissions` with the right fields, success message
+  displays. Test row cleaned up afterward.
+
 ## Recent Update (Supabase Analytics Schema, Notification-Content Wiring, Forecast-Accuracy Pipeline, Referral Tracking, Full Event Instrumentation)
 
 - Expanded Supabase schema across 8 migrations (`supabase/migrations/0001`–`0008`): `app_installations`,

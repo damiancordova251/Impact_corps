@@ -1,6 +1,6 @@
 // Bump APP_VERSION whenever cached app shell or icon assets need to be refreshed
 // for installed PWAs.
-const APP_VERSION = "referral-notification-lifecycle";
+const APP_VERSION = "report-issue-settings";
 const CACHE_NAME = `ready-${APP_VERSION}`;
 
 // Core assets use network-first caching so pilot deployments are less likely to
@@ -42,6 +42,7 @@ const CORE_ASSETS = [
   "./src/features/notifications/notificationSettings.js",
   "./src/features/clothingPreferences/clothingPreferencesUI.js",
   "./src/features/feedback/feedbackPrompt.js",
+  "./src/features/feedback/reportIssue.js",
   "./src/features/pwa/serviceWorkerClient.js",
   "./src/features/share/shareFab.js"
 ];

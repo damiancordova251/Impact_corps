@@ -28,7 +28,10 @@ export const es = {
     sendTest: "Enviar prueba",
     languageLabel: "Idioma",
     languageEnglish: "English",
-    languageSpanish: "Español"
+    languageSpanish: "Español",
+    reportIssueTitle: "Reportar un problema",
+    reportIssueBody: "¿Algo no funciona bien? Cuéntanos y lo revisaremos.",
+    reportIssueButton: "Reportar un problema"
   },
   checklist: {
     todayKicker: "Hoy",
@@ -259,5 +262,17 @@ export const es = {
     dismiss: "Ahora no",
     thanks: "¡Gracias por tus comentarios!",
     submitFailed: "No se pudieron enviar los comentarios. Inténtalo de nuevo más tarde."
+  },
+  reportIssue: {
+    kicker: "Reportar un problema",
+    title: "¿Qué salió mal?",
+    body: "Cuéntanos qué pasó — un error, algo confuso, lo que sea. Esto llega directo al equipo.",
+    messageLabel: "¿Qué pasó?",
+    messagePlaceholder: "Describe el problema...",
+    submit: "Enviar",
+    cancel: "Cancelar",
+    thanks: "Gracias, ¡lo revisaremos!",
+    submitFailed: "No se pudo enviar en este momento. Inténtalo de nuevo más tarde.",
+    emptyMessage: "Describe el problema antes de enviarlo."
   }
 };

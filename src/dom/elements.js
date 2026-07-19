@@ -31,6 +31,7 @@ export const elements = {
   enableNotificationsButton: document.querySelector("#enableNotificationsButton"),
   testNotificationButton: document.querySelector("#testNotificationButton"),
   languageSelect: document.querySelector("#languageSelect"),
+  reportIssueButton: document.querySelector("#reportIssueButton"),
   clothingPreferencesScreen: document.querySelector("#clothingPreferencesScreen"),
   clothingPreferencesForm: document.querySelector("#clothingPreferencesForm"),
   clothingPreferencesSkip: document.querySelector("#clothingPreferencesSkip"),

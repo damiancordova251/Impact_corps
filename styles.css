@@ -457,6 +457,16 @@ this accessible without a custom dropdown component. */
   gap: 12px;
 }
 
+.report-issue-setting {
+  border-top: 1px solid var(--line);
+  padding: 14px;
+}
+
+.report-issue-setting .secondary-action {
+  width: 100%;
+  margin-top: 12px;
+}
+
 .language-select {
   min-height: 40px;
   border: 1px solid var(--line);
