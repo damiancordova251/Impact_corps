@@ -4,6 +4,20 @@ Last updated: July 19, 2026
 
 This document summarizes what has been built so far for the Impact Corps / Ready PWA project. It is intended as a self-contained handoff for future development work.
 
+## Recent Update ("What's New" Note on the Update Banner)
+
+- The service-worker update-available banner (`serviceWorkerClient.js`) now shows a short "what
+  changed" note underneath the Refresh button, sourced from a new `src/changelog.js` — a plain
+  array of `{version, en, es}` entries, newest last. The banner always displays the last entry,
+  fetched fresh via a dynamic `import()` (not the currently-running page's own stale copy), which
+  works correctly under the existing network-first service-worker fetch strategy.
+- **New standing convention**: whenever `sw.js`'s `APP_VERSION` is bumped for a round of changes,
+  add one matching entry to `src/changelog.js` in both languages summarizing what changed for pilot
+  users. A comment next to `APP_VERSION` is a reminder of this.
+- Verified with a real headless-browser pass: dynamic import resolves, locale-based message
+  selection works, and the banner layout (grid-based, message wraps under the Refresh button)
+  renders correctly.
+
 ## Recent Update (Always-Available "Report a Problem" in Settings)
 
 - Added a new Settings entry, `src/features/feedback/reportIssue.js`, distinct from the existing

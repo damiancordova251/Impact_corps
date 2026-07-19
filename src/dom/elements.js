@@ -49,5 +49,6 @@ export const elements = {
   onboardingSecondary: document.querySelector("#onboardingSecondary"),
   updateBanner: document.querySelector("#updateBanner"),
   updateRefreshButton: document.querySelector("#updateRefreshButton"),
+  updateBannerMessage: document.querySelector("#updateBannerMessage"),
   appStatus: document.querySelector("#appStatus")
 };

@@ -1,7 +1,7 @@
 import { elements } from "../../dom/elements.js";
 import { APP_CONFIG } from "../../config.js";
 import { trackPilotEvent } from "../../services/pilotAnalytics.js";
-import { t } from "../../i18n/i18n.js";
+import { getLocale, t } from "../../i18n/i18n.js";
 
 // Registers the service worker, wires the update-available banner, tracks
 // notification-click opens, and reflects install state into pilot analytics.
@@ -67,6 +67,30 @@ function showUpdateBanner() {
   }
 
   elements.updateBanner.hidden = false;
+  showLatestChangelogMessage();
+}
+
+// The currently-running page's own copy of changelog.js is whatever shipped
+// with ITS load, not the update that was just detected — so this is
+// imported fresh (the service worker's network-first fetch handling, same as
+// every other core asset, means this actually reaches the new deployed
+// file rather than a stale cached one).
+async function showLatestChangelogMessage() {
+  if (!elements.updateBannerMessage) {
+    return;
+  }
+
+  try {
+    const { CHANGELOG } = await import("../../changelog.js");
+    const latest = CHANGELOG[CHANGELOG.length - 1];
+    const message = latest?.[getLocale()] ?? latest?.en;
+
+    if (message) {
+      elements.updateBannerMessage.textContent = message;
+    }
+  } catch (error) {
+    // Best-effort; the banner still works without a "what's new" message.
+  }
 }
 
 // Notification click tracking can arrive either as a service worker message from
