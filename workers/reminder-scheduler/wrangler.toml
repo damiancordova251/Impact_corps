@@ -10,4 +10,9 @@ crons = ["*/5 * * * *"]
 [vars]
 SUPABASE_PUSH_SUBSCRIPTIONS_TABLE = "push_subscriptions"
 CRON_WINDOW_MINUTES = "5"
-DRY_RUN = "true"
+# This Worker has already been graduated to real sends in production. Keep
+# this "false" here, not just in the dashboard: every `wrangler deploy`
+# re-syncs [vars] from this file, so a dashboard-only override silently
+# reverts to whatever's committed here on the next deploy (this is exactly
+# what silently disabled all scheduled reminders for ~4 weeks).
+DRY_RUN = "false"

@@ -1,8 +1,33 @@
 # Ready PWA Postmortem and Handoff
 
-Last updated: July 19, 2026
+Last updated: August 13, 2026
 
 This document summarizes what has been built so far for the Impact Corps / Ready PWA project. It is intended as a self-contained handoff for future development work.
+
+## Incident: Scheduled Reminders Silently Disabled for ~4 Weeks (Fixed August 13, 2026)
+
+- **Symptom**: manual "send test" push notifications worked fine, but real scheduled morning
+  reminders never arrived — for every subscriber, not just one user. Caught when a pilot tester
+  travelling internationally noticed their reminder never showed up.
+- **Root cause**: `workers/reminder-scheduler/wrangler.toml`'s checked-in `DRY_RUN` value was
+  `"true"` (the intentional safe default for a brand-new deploy), but this Worker had already been
+  manually graduated to real sends (`DRY_RUN=false`) via a Cloudflare dashboard environment-variable
+  edit at some point before mid-July — a change that was never reflected back into the repo. Every
+  `wrangler deploy` re-syncs a Worker's `[vars]` from `wrangler.toml`, so redeploying this Worker
+  (to ship the weather-aware notification content) silently reverted the dashboard's `DRY_RUN=false`
+  back to `"true"`. The cron kept firing every 5 minutes, correctly finding due subscriptions, and
+  correctly logging a summary — it just never actually sent anything, for roughly a month, with
+  nothing anywhere reporting it as an error.
+- **How it was found**: `npx wrangler tail` (live log streaming, no dashboard setup needed) showed
+  the scheduler's own summary log printing `dryRun: true` on every run.
+- **Fix**: `DRY_RUN` is now committed as `"false"` in `wrangler.toml`, with a comment explaining why,
+  so a future redeploy can't silently regress this again. Any non-secret setting that's been
+  manually changed in the Cloudflare dashboard needs to also be committed to the relevant
+  `wrangler.toml`, or it will not survive the next deploy.
+- **Lesson for future changes to either Worker** (`reminder-scheduler` or `forecast-tracker`): before
+  telling a user to run `wrangler deploy`, check whether any `[vars]` value differs between the
+  checked-in `wrangler.toml` and the Worker's actual currently-deployed configuration in the
+  dashboard — a silent redeploy will always overwrite the latter with the former.
 
 ## Recent Update ("What's New" Note on the Update Banner)
 
