@@ -30,9 +30,9 @@ These non-secret vars are included in `wrangler.toml`:
 
 - `SUPABASE_PUSH_SUBSCRIPTIONS_TABLE=push_subscriptions`
 - `CRON_WINDOW_MINUTES=5`
-- `DRY_RUN=true`
+- `DRY_RUN=false`
 
-Keep `DRY_RUN=true` until the Worker can read Supabase and identify due reminders correctly. Do not set deployed `DRY_RUN=false` until Render has `ENABLE_EXPRESS_SCHEDULER=false`.
+This Worker has already been graduated to production (`DRY_RUN=false`, `ENABLE_EXPRESS_SCHEDULER=false` on Render) and is the live scheduled-reminder sender. **`DRY_RUN` must stay committed as `false` in `wrangler.toml`**, not just set in the Cloudflare dashboard — every `wrangler deploy` re-syncs `[vars]` from this file, so a dashboard-only override silently reverts on the next deploy. That exact mistake once disabled all scheduled reminders for about a month with nothing logging it as an error — see `git log --grep=DRY_RUN` for the full incident.
 
 ## Local Setup
 
